@@ -8,8 +8,6 @@ def neural_network(vec, labels):
 
     vec: numpy array, contains features
     labels: one hot encoded array, contains data labels
-
-    data: closed txt file
     """
 
     # HYPER PARAMETERS
@@ -114,8 +112,7 @@ def data_parser(data):
             # file is tab delimited
             split_samples = sample.split('\t')
             # last column contains the label
-            # labels are set to 0 and 1 (in the data they are 1 and 2)
-            labels.append((int(split_samples[-1]) - 1))
+            labels.append(int(split_samples[-1]))
 
             features = []
             for feature in split_samples[:-1]:
