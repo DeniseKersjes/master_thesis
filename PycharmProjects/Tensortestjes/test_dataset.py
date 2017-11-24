@@ -1,7 +1,12 @@
 import numpy as np
 import tensorflow as tf
 from sklearn.model_selection import train_test_split
-
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+import matplotlib.mlab as mlab
+import matplotlib.cm as cm
+import tkinter as tk
 
 def neural_network(vec, labels):
     """ Return predicted labels and actual labels with error rate after training the fully connected neural network
@@ -16,7 +21,7 @@ def neural_network(vec, labels):
     act_func = tf.nn.relu
     pred_act_func = tf.nn.softmax
     layer_1_units = 10
-    learning_rate = 0.001
+    learning_rate = 0.01
 
     # DATA HANDLING
     # define training and test set, training is set on 80%
@@ -50,11 +55,11 @@ def neural_network(vec, labels):
 
     sess = tf.Session()
     sess.run(tf.global_variables_initializer())
-    writer = tf.summary.FileWriter("./graphs", graph=sess.graph)
+    writer = tf.summary.FileWriter("./graphs/tensorboard", graph=sess.graph)
 
     # CHECKS
     # set the range for looping to train the neural network
-    for i in range(200):
+    for i in range(250):
         # to prevent slicing will be out of range
         offset = int(i * batch_size % len(training_vec))
         # with feed_dict the placeholder is filled in
@@ -69,15 +74,59 @@ def neural_network(vec, labels):
             pred_out, label_input_out = sess.run([pred, label_input],
                                                  feed_dict={data_input: training_vec[offset:offset + batch_size],
                                                             label_input: training_labels[offset:offset + batch_size]})
+            # compare the true labels with the predicted labels
             print("\nlabels     : ", np.argmax(label_input_out, axis=1), )
-            print("predictions: ", np.argmax(pred_out, axis=1), '\n')
+            print("predictions: ", np.argmax(pred_out, axis=1))
+            correct_prediction = tf.equal(tf.argmax(pred_out, axis=1), tf.argmax(label_input_out, axis=1))
+
+            # check the accuracy by counting the miss-classifications
+            accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
+            accuracy_sess = sess.run(accuracy, feed_dict={label_input: test_labels})
+            print("accuracy   :  {}".format(accuracy_sess*100), '%\n')
 
     test_cost = sess.run(cost, feed_dict={data_input: test_vec,
                                           label_input: test_labels})
     print("\ntest_cost: {} ".format(test_cost))
+    print("end accuracy of the predictions: {}".format(accuracy_sess*100), '%')
+
     writer.close()
     sess.close()
     return 'Working!'
+
+
+def plot(vec):
+    """ Return contour plot of features
+
+    vec: numpy array, contains features
+    """
+
+    # ADDITIONAL CODE, to see what are the ranges from the features
+    # get a list containing all the first features and second features, respectively
+    # feature_1 = list(map(lambda x: x[0], vec))
+    # feature_2 = list(map(lambda x: x[1], vec))
+    # x = np.arange(min(feature_1), max(feature_1), delta)
+    # y = np.arange(min(feature_2), max(feature_2), delta)
+
+    # make a numpy arange from the minimum feature until the maximum features
+    # delta is the size of spacing between samples
+    delta = 0.1
+    x = np.arange(-2.0, 4.0, delta)
+    y = np.arange(-3.0, 4.0, delta)
+
+    # make a 2-D grind
+    x, y = np.meshgrid(x, y)
+
+    # assign bivariate Gaussian distribution for equal shape X, Y.
+    z1 = mlab.bivariate_normal(x, y, sigmax=1.0, sigmay=1.0, mux=0.0, muy=0.0)
+    z2 = mlab.bivariate_normal(x, y, sigmax=1.5, sigmay=0.5, mux=1, muy=1)
+    z = 10.0 * (z2 - z1)
+
+    # create plot
+    contour_plot = plt.contour(x, y, z)
+    # assign labels and title
+    plt.clabel(contour_plot, inline=1, fontsize=10)
+    plt.title('Feature 1 against feature 2')
+    plt.savefig("./graphs/figures/f1_2.png")
 
 
 def initialization_based(input_array):
@@ -122,7 +171,6 @@ def data_parser(data):
         # make the features and labels as a numpy array
         vec = np.array(vec)
         labels = np.array(labels)
-
         return vec, labels
 
 
@@ -130,5 +178,6 @@ if __name__ == "__main__":
     data = "../../Thesis/data/twoclass.txt"
     vec, labels = data_parser(data)
     labels = initialization_based(labels)
-
     neural_network(vec, labels)
+
+    plot(vec)
