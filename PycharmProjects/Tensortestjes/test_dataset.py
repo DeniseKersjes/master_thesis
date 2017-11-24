@@ -5,11 +5,11 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import matplotlib.mlab as mlab
-import matplotlib.cm as cm
-import tkinter as tk
+
 
 def neural_network(vec, labels):
-    """ Return predicted labels and actual labels with error rate after training the fully connected neural network
+    """ Return predicted labels and actual labels with error rate and accuracy after training the fully connected
+    neural network
 
     vec: numpy array, contains features
     labels: one hot encoded array, contains data labels
@@ -28,7 +28,6 @@ def neural_network(vec, labels):
     training_vec, test_vec, training_labels, test_labels = train_test_split(vec, labels, test_size=0.2)
     feature_number = 2  # == training_vec.shape[1]
     class_number = 2  # == len( np.unique(labels) )
-
 
     # GRAPH DEFINITION
     # use scope to get a nicely lay-out in TensorBoard
@@ -100,7 +99,7 @@ def plot(vec):
     vec: numpy array, contains features
     """
 
-    # ADDITIONAL CODE, to see what are the ranges from the features
+    # ADDITIONAL CODE, to see what the ranges are of the features
     # get a list containing all the first features and second features, respectively
     # feature_1 = list(map(lambda x: x[0], vec))
     # feature_2 = list(map(lambda x: x[1], vec))
@@ -179,5 +178,4 @@ if __name__ == "__main__":
     vec, labels = data_parser(data)
     labels = initialization_based(labels)
     neural_network(vec, labels)
-
     plot(vec)
