@@ -3,6 +3,8 @@ import tensorflow as tf
 from sklearn.model_selection import train_test_split
 import matplotlib.pyplot as plt
 import matplotlib.mlab as mlab
+from matplotlib import cm
+from mpl_toolkits.mplot3d import Axes3D
 
 
 def neural_network(vec, labels):
@@ -19,6 +21,7 @@ def neural_network(vec, labels):
     act_func = tf.nn.relu
     pred_act_func = tf.nn.softmax
     layer_1_units = 10
+    # layer_2_units = 8
     learning_rate = 0.01
 
     # DATA HANDLING
@@ -37,7 +40,9 @@ def neural_network(vec, labels):
     # Fully-connected layers
     with tf.variable_scope("fully-connected"):
         fully_connected_1 = tf.layers.dense(inputs=data_input, units=layer_1_units, activation=act_func, use_bias=True,
-                                            name="fc-layer")
+                                            name="fc-layer1")
+        # fully_connected_2 = tf.layers.dense(inputs=fully_connected_1, units=layer_2_units, activation=act_func,
+        #                                     use_bias=True, name="fc-layer2")
 
     with tf.variable_scope('output'):
         pred = tf.layers.dense(inputs=fully_connected_1, units=2, activation=pred_act_func, use_bias=True,
@@ -56,7 +61,7 @@ def neural_network(vec, labels):
 
     # CHECKS
     # set the range for looping to train the neural network
-    for i in range(250):
+    for i in range(200):
         # to prevent slicing will be out of range
         offset = int(i * batch_size % len(training_vec))
         # with feed_dict the placeholder is filled in
@@ -104,6 +109,9 @@ def plot(vec):
     # x = np.arange(min(feature_1), max(feature_1), delta)
     # y = np.arange(min(feature_2), max(feature_2), delta)
 
+    fig = plt.figure()
+    ax = Axes3D(fig)
+
     # make a numpy arange from the minimum feature until the maximum features
     # delta is the size of spacing between samples
     delta = 0.1
@@ -118,13 +126,18 @@ def plot(vec):
     z2 = mlab.bivariate_normal(x, y, sigmax=1.5, sigmay=0.5, mux=1, muy=1)
     z = 10.0 * (z2 - z1)
 
-    # create plot
+    # create surface plot
+    ax.plot_surface(x, y, z, cmap=cm.coolwarm, linewidth=0, antialiased=False)
+    plt.savefig("./graphs/figures/f1_2surf3n.png")
+
+    """
+    # create contour plot
     contour_plot = plt.contour(x, y, z)
     # assign labels and title
     plt.clabel(contour_plot, inline=1, fontsize=10)
     plt.title('Feature 1 against feature 2')
-    plt.savefig("./graphs/figures/f1_2.png")
-
+    plt.savefig("./graphs/figures/f1_2n.png")
+    """
 
 def initialization_based(input_array):
     """ Return the data as one hot encoded data
@@ -176,4 +189,6 @@ if __name__ == "__main__":
     vec, labels = data_parser(data)
     labels = initialization_based(labels)
     neural_network(vec, labels)
+    exit()
+
     plot(vec)
