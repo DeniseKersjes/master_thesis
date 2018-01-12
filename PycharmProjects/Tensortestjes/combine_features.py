@@ -1,19 +1,17 @@
 #!/usr/bin/env python
 """
 Author: Denise Kersjes (student number 950218-429-030)
+Date: 9 January 2018
 Script for converting features of a specific sequence into correct input for convolutional neural network.
 
 Output is a numpy array containing feature scores of a particular sequence.
 """
 
 import numpy as np
-import tensorflow as tf
-
+from optparse import OptionParser
 
 class inputCNN():
-    """ Numpy array to store the different features scores of a particular sequence.
-
-    This object is designed to keep track of the different data files containing features of specific sequence.
+    """ This object is designed to keep track of the different data files containing features of a specific sequence.
     """
 
     def __init__(self, data_directory):
@@ -21,14 +19,22 @@ class inputCNN():
 
         data_directory: string, working directory where the data can be found
 
-        defined parameters
-
+        Defined parameters:
+        self.genome: open TSV file, containing sequences of particular nucleotide positions of the Human genome
+        self.phastcon_mam: open TSV file,
+        self.phastcon_pri: open TSV file,
+        self.phastcon_verp: open TSV file,
+        self.phylop_mam: open TSV file,
+        self.phylop_pri: open TSV file,
+        self.phylop_verp: open TSV file,
+        self.gerp: open TSV file,
+        self.gerp_elem: open TSV file,
         """
 
-        # convert the working directory to an object variable
+        # Convert the working directory to an object variable
         self.data_directory = data_directory
 
-        # define the different data files with features as an object variable
+        # Define the different data files with features as an object variable
         self.genome = open(data_directory + "Genome_out.tsv", "r")
         self.phastcon_mam = open(data_directory + "mamPhastcon_out.tsv", "r")
         self.phastcon_pri = open(data_directory + "priPhastcon_out.tsv", "r")
@@ -37,29 +43,33 @@ class inputCNN():
         self.phylop_pri = open(data_directory + "priPhylop_out.tsv", "r")
         self.phylop_verp = open(data_directory + "verpPhylop_out.tsv", "r")
         self.gerp = open(data_directory + "Gerp_out.tsv", "r")
-        self.elem = open(data_directory + "GerpElem_out.tsv", "r")
+        self.gerp_elem = open(data_directory + "GerpElem_out.tsv", "r")
 
-        self.file = open(data_directory + "input_CNN.txt", "w")
-        # list(map(lambda line: self.file.write(line.split('\t')[2]), self.genome))
+    def nt_features(self, file):
+        """ Return: list per nucleotide containing boolean numbers to indicate how a particular sequence looks like
 
-    def nt_features(self):
-        """ Return: list per nucleotide containing boolean numbers for the particular nucleotide
+        file: open TSV file, containing sequences of particular nucleotide positions of the Human genome
 
+        Defined variables:
+        ntA: list of lists, containing boolean numbers to indicate where adenine's are located in a particular sequence
+        ntC: list of lists, containing boolean numbers to indicate where cytosine's are located in a particular sequence
+        ntT: list of lists, containing boolean numbers to indicate where thymine's are located in a particular sequence
+        ntG: list of lists, containing boolean numbers to indicate where guanine's are located in a particular sequence
         """
 
-        # define a list per nucleotide
+        # Define a list per nucleotide
         ntA = []
         ntC = []
         ntT = []
         ntG = []
 
-        for line in self.genome:
+        for line in file:
             header = line.startswith('#')
-            # the header line should not be considered for data processing
+            # The header line should not be considered for data processing
             if header == False:
-                # the genome file is tab delimited, and the sequence is located after the second tab
+                # The genome file is tab delimited, and the sequence is located after the second tab
                 seq = line.split("\t")[2]
-                # define new nucleotides list per sequence
+                # Define new nucleotides list per sequence
                 A = []
                 C = []
                 T = []
@@ -85,7 +95,7 @@ class inputCNN():
                         C.append(0)
                         T.append(0)
                         G.append(1)
-                # extend the objected nucleotide list with the new sequence
+                # Extend the objected nucleotide list with the new sequence
                 ntA.append(A)
                 ntC.append(C)
                 ntT.append(T)
@@ -93,49 +103,109 @@ class inputCNN():
 
         return ntA, ntC, ntT, ntG
 
-    def phastcon(self):
-        """ Return: PhastCon scores per sequence
+    def phastcon_phylop_scores(self, file):
+        """ Return: list of lists containing PhastCon or PhyloP scores per sequence
 
         """
 
-        #
-        #parsing = lambda line: [(line.strip('\n').split('\t')[2]).split(',')] if (line.startswith('#') == False) else []
+        # PhastCon files are tab delimited, and the scores are located after the second tab
+        # The scores are comma separated
+        parsed_file = list(map(lambda line: (line.strip('\n').split('\t')[2]).split(','), file))
 
-        mam = list(map(lambda line: [(line.strip('\n').split('\t')[2])] , self.phastcon_mam))
-        print(mam[1:])
-        mam2 = list(map(lambda scores: scores.split(','), mam[1:]))
-        print(mam2)
-        # for i in self.phastcon_mam:
-        #     print(i)
+        # The first list of the parsed file list contains the header line, so this list is excluded
+        return parsed_file[1:]
 
-    def combine(self):
+    def gerp_scores(self, file):
         """
-
+        :param file:
         :return:
         """
 
-        # get the nucleotides scores
-        ntA, ntC, ntT, ntG = inputCNN(data_directory).nt_features()
+        # Gerp files are tab delimited,and the scores are located after the second tab
+        # The scores are comma separated
+        parsed_file = list(map(lambda line: (line.strip('\n').split('\t')[2]).split(','), file))
 
-        print(ntA)
-        # get the PhastCon scores
-        inputCNN(data_directory).phastcon()
+        # Every even number (start counting with 0) in the Gerp score list of a sequence is the GerpN or GerpRS score
+        # Every odd number of the score list is the GerpS score or the p-value of GerpRS
+        Gerp1 = [] # Can be GerpN or GerpRS
+        Gerp2 = [] # Can be GerpS or Gerp_pval
+        for score_list in parsed_file[1:]:
+            # Create temporarily lists for every sequence
+            Gerp1_tmp = []
+            Gerp2_tmp = []
+            for index, score in enumerate(score_list):
+                # Convert the not available scores to NoneType
+                if score == '-':
+                    score = None
+                if index % 2 == 0:
+                    Gerp1_tmp.append(score)
+                else:
+                    Gerp2_tmp.append(score)
+            # Extend the Gerp lists with the temporary ones
+            Gerp1.append(Gerp1_tmp)
+            Gerp2.append(Gerp2_tmp)
 
+        return Gerp1, Gerp2
 
+    def combine(self):
+        """ Return numpy array to store the different features scores of a particular sequence.
 
-        zipped = list(zip(ntA, ntC, ntT, ntG))
-        # for i in zipped:
-        #     print(i)
-        # print(zipped)
+        Defined variables:
+        ntA: list of lists, containing boolean numbers to indicate where adenine's are located in a particular sequence
+        ntC: list of lists, containing boolean numbers to indicate where cytosine's are located in a particular sequence
+        ntT: list of lists, containing boolean numbers to indicate where thymine's are located in a particular sequence
+        ntG: list of lists, containing boolean numbers to indicate where guanine's are located in a particular sequence
+        phastcon_mam: list of lists, containing floats which represent mammalian PhastCon scores
+        phastcon_pri: list of lists, containing floats which represent primate PhastCon scores
+        phastcon_verp list of lists, containing floats which represent vertebrate PhastCon scores
+        phylop_mam: list of lists, containing floats which represent mammalian PhyloP scores
+        phylop_pri: list of lists, containing floats which represent primate PhyloP scores
+        phylop_verp list of lists, containing floats which represent vertebrate PhyloP scores
+        GerpN: list of lists, containing floats (or NoneTypes) which represent the neutral evolution scores by GERP++
+        GerpS: list of lists, containing floats (or NoneTypes) which represent rejected substitution scores by GERP++
+        GerpRS: list of lists, containing floats (or NoneTypes) which represent the Gerp element scores
+        Gerp_pval: list of lists, containing floats (or NoneTypes) which represent Gerp element p-values
+        """
 
-        ty = np.array(zipped)
-        print(ty)
+        # Get the nucleotides scores
+        ntA, ntC, ntT, ntG = inputCNN(data_directory).nt_features(self.genome)
 
-        # list(map(lambda seq: self.file.write(str(seq) + '\n'), ntA))
+        # Get the PhastCon scores and the PhyloP scores
+        phastcon_mam = inputCNN(data_directory).phastcon_phylop_scores(self.phastcon_mam)
+        phastcon_pri = inputCNN(data_directory).phastcon_phylop_scores(self.phastcon_pri)
+        phastcon_verp = inputCNN(data_directory).phastcon_phylop_scores(self.phastcon_verp)
+        phylop_mam = inputCNN(data_directory).phastcon_phylop_scores(self.phylop_mam)
+        phylop_pri = inputCNN(data_directory).phastcon_phylop_scores(self.phylop_pri)
+        phylop_verp = inputCNN(data_directory).phastcon_phylop_scores(self.phylop_verp)
+        # Get the Gerp scores
+        GerpN, GerpS = inputCNN(data_directory).gerp_scores(self.gerp)
+        GerpRS, Gerp_pval = inputCNN(data_directory).gerp_scores(self.gerp_elem)
+
+        zipped = list(zip(ntA, ntC, ntT, ntG,
+                          phastcon_mam, phastcon_pri, phastcon_verp,
+                          phylop_mam, phylop_pri, phylop_verp,
+                          GerpN, GerpS, GerpRS, Gerp_pval))
+
+        input_format = np.array(zipped, dtype='float')
+
+        print(input_format)
+        # return input_format
+
 
 if __name__ == "__main__":
-    """
-    """
-    data_directory = "/mnt/scratch/kersj001/data/output/test/test_ben_none/"
-    # inputCNN(data_directory)
+
+    # Specify the options for running from the command line
+    parser = OptionParser()
+    # Specify the data directory
+    parser.add_option("-p", "--path", dest="path", help="Path to the output of the 'find_sequence.py' script that\
+     finds for genomic locations the associated sequences and annotations within a defined window size upstream and\
+      downstream of the query location.", default="")
+
+    # Get the command line options
+    (options, args) = parser.parse_args()
+    data_directory = options.path
+
+    # Run the main function
     inputCNN(data_directory).combine()
+
+    # "/mnt/scratch/kersj001/data/output/test/test_ben2/"
