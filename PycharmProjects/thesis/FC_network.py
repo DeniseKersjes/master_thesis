@@ -6,12 +6,14 @@ import matplotlib.pyplot as plt
 from combine_features import inputCNN
 
 
-def neural_network(vec, labels):
+def neural_network(vec, labels, title='neighbour'):
     """ Return predicted labels and actual labels with error rate and accuracy after training the fully connected
     neural network
 
     vec: numpy array, contains features
     labels: one hot encoded array, contains data labels
+    title: string, indicate if the neural network is running with only the features of the SNP of interest or also
+        includes the features of the neighbouring positions, default=neighbour
     """
 
     # HYPER PARAMETERS
@@ -19,11 +21,11 @@ def neural_network(vec, labels):
     batch_size = int(vec.shape[0] * 0.1)
     act_func = tf.nn.relu
     pred_act_func = tf.nn.softmax
-    number_hidden_layers = 2
     layer_1_units = 30
     layer_2_units = 15
+    number_hidden_layers = 2
     learning_rate = 0.01
-    iterations = 300
+    iterations = 500
 
     # DATA HANDLING
     # Define training and test set
@@ -102,7 +104,7 @@ def neural_network(vec, labels):
     writer.close()
     sess.close()
 
-    error_plot(all_costs, number_hidden_layers, learning_rate)
+    error_plot(all_costs, number_hidden_layers, learning_rate, title)
 
     return all_costs
 
@@ -125,7 +127,7 @@ def initialization_based(input_array):
     return out
 
 
-def error_plot(costs, n_hidden_layers, learning_rate):
+def error_plot(costs, n_hidden_layers, learning_rate, title):
     """ Return plot of the decreasing error during the training of the neural network
 
     costs: list, contain error costs
@@ -138,8 +140,7 @@ def error_plot(costs, n_hidden_layers, learning_rate):
     plt.ylabel("Cost function")
     plt.title("Cost function while training the neural network \n{} hidden layers, learning rate: {}".format(
         n_hidden_layers, learning_rate))
-    plt.savefig("./graphs/figures/error2.3.png")
-    saving("./output_ANN/error_neighbour")
+    saving("./output_ANN/error_{}".format(title))
 
 
 def saving(file_path):
@@ -154,16 +155,26 @@ def saving(file_path):
     plt.savefig(file_path+"_{}.png".format(index_saving))
 
 
-def data_parser(data_ben, data_del):
+def data_parser(data_ben, data_del, snp_or_neighbour='neighbour'):
     """ Return the labels and the features as two separated numpy arrays
 
     data_ben: numpy array with shape (number of samples, number of features, number of nucleotides)
     data_del: numpy array with shape (number of samples, number of features, number of nucleotides)
+    snp_or_neighbour: string, indicates if the neural network will run with only the features of the SNP of interest
+        or also includes the features of the neighbouring positions, default=neighbour
     """
 
     # Reshape the data into a 2D array
-    data_ben = data_ben.reshape(data_ben.shape[0], -1)
-    data_del = data_del.reshape(data_del.shape[0], -1)
+    if snp_or_neighbour == "SNP" or snp_or_neighbour == "snp":
+        # Get only the features of the SNP of interest, which is located at the middle position of the data
+        index_SNPi_ben = (data_ben.shape[2] - 1) / 2  # -1 for the SNP of interest
+        index_SNPi_del = (data_del.shape[2] - 1) / 2
+        data_ben = data_ben[:, :, int(index_SNPi_ben)]
+        data_del = data_del[:, :, int(index_SNPi_del)]
+    else:
+        # Reshape the data into a 2D array including the neighbouring positions
+        data_ben = data_ben.reshape(data_ben.shape[0], -1)
+        data_del = data_del.reshape(data_del.shape[0], -1)
 
     # Replace NaN values with 0
     data_ben = np.nan_to_num(data_ben)
@@ -191,6 +202,10 @@ if __name__ == "__main__":
     directory_del = "/mnt/scratch/kersj001/data/output/test/test_del/"
     del_data = inputCNN(directory_del).combine(directory_del)
 
-    samples_neighbour, labels_neighbour = data_parser(ben_data, del_data)
+    # Run the neural network with the SNP of interest and its neighbouring positions
+    # samples_neighbour, labels_neighbour = data_parser(ben_data, del_data, snp_or_neighbour='neighbour')
+    # neural_network(samples_neighbour, labels_neighbour, title='neighbour')
 
-    neural_network(samples_neighbour, labels_neighbour)
+    # Run the neural network with only the SNP of interest
+    samples_neighbour, labels_neighbour = data_parser(ben_data, del_data, snp_or_neighbour='SNP')
+    neural_network(samples_neighbour, labels_neighbour, title='SNP')
