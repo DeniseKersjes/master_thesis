@@ -1,9 +1,28 @@
+import time
+import h5py
 import os
 import numpy as np
 import tensorflow as tf
 from sklearn.model_selection import train_test_split
 import matplotlib.pyplot as plt
-from combine_features import inputCNN
+
+
+def shuffled_copies(samples, labels):
+    """ Return a shuffled array with samples and labels
+
+    samples: numpy array, contains features
+    labels: one hot encoded array, contains data labels
+    """
+
+    # Check if the samples and labels are from the same format
+    assert len(samples) == len(labels)
+    permu = np.random.permutation(len(samples))
+
+    # Get the correct indexes
+    samples = samples[permu]
+    labels = labels[permu]
+
+    return samples, labels
 
 
 def neural_network(vec, labels, title='neighbour'):
@@ -17,20 +36,20 @@ def neural_network(vec, labels, title='neighbour'):
     """
 
     # HYPER PARAMETERS
-    # There is chosen to use a batch size of 10%
-    batch_size = int(vec.shape[0] * 0.1)
     act_func = tf.nn.relu
     pred_act_func = tf.nn.softmax
-    layer_1_units = 30
-    layer_2_units = 15
-    number_hidden_layers = 2
-    learning_rate = 0.01
-    iterations = 500
+    layer_1_units = 5
+    # layer_2_units = 7
+    # layer_3_units = 5
+    number_hidden_layers = 1
+    learning_rate = 0.05
+    iterations = 300
 
     # DATA HANDLING
     # Define training and test set
     test_size = 0.2  # training is set on 80%
     training_vec, test_vec, training_labels, test_labels = train_test_split(vec, labels, test_size=test_size)
+    batch_size = int(training_vec.shape[0] * 0.1)  # There is chosen to use a batch size of 10%
     feature_number = training_vec.shape[1]
     class_number = len(np.unique(labels))
 
@@ -45,11 +64,13 @@ def neural_network(vec, labels, title='neighbour'):
     with tf.variable_scope("fully-connected"):
         fully_connected_1 = tf.layers.dense(inputs=data_input, units=layer_1_units, activation=act_func, use_bias=True,
                                             name="fc-layer1")
-        fully_connected_2 = tf.layers.dense(inputs=fully_connected_1, units=layer_2_units, activation=act_func,
-                                            use_bias=True, name="fc-layer2")
+        # fully_connected_2 = tf.layers.dense(inputs=fully_connected_1, units=layer_2_units, activation=act_func,
+        #                                     use_bias=True, name="fc-layer2")
+        # fully_connected_3 = tf.layers.dense(inputs=fully_connected_2, units=layer_3_units, activation=act_func,
+        #                                     use_bias=True, name="fc-layer3")
 
     with tf.variable_scope('output'):
-        pred = tf.layers.dense(inputs=fully_connected_2, units=2, activation=pred_act_func, use_bias=True,
+        pred = tf.layers.dense(inputs=fully_connected_1, units=2, activation=pred_act_func, use_bias=True,
                                name="prediction")
 
     with tf.variable_scope("prediction"):
@@ -66,16 +87,22 @@ def neural_network(vec, labels, title='neighbour'):
     # CHECKS
     # Set the range for looping to train the neural network
     all_costs = []
-    for i in range(iterations):
+    for i in range(iterations+1):
         # To prevent slicing will be out of range
         offset = int(i * batch_size % len(training_vec))
+        # Epoch wise training data shuffling
+        if offset + batch_size >= len(training_vec):
+            training_vec, training_labels = shuffled_copies(training_vec, training_labels)
         # With feed_dict the placeholder is filled in
         _, current_cost = sess.run([minimization_step, cost],
-                                   feed_dict={data_input: training_vec[offset:offset + batch_size],
-                                              label_input: training_labels[offset:offset + batch_size]})
-        all_costs += [current_cost]
+                                   feed_dict={data_input: training_vec[:],
+                                              label_input: training_labels[:]})
+                                   # feed_dict={data_input: training_vec[offset:offset + batch_size],
+                                   #            label_input: training_labels[offset:offset + batch_size]})
+
+        all_costs.append(current_cost)
         # Check every 10th loop what the cost is
-        if i % 5 == 0:
+        if i % 10 == 0:
             print("STEP: {} | Average cost: {}".format(i, np.mean(current_cost)))
         # Check every 50th loop how well the prediction is
         if i % 50 == 0:
@@ -92,14 +119,14 @@ def neural_network(vec, labels, title='neighbour'):
             accuracy_sess = sess.run(accuracy, feed_dict={label_input: test_labels})
             print("accuracy   :  {0:.2f}".format(accuracy_sess * 100), '%\n')
 
-    test_cost = sess.run(cost, feed_dict={data_input: test_vec,
-                                          label_input: test_labels})
+    predictions, test_cost = sess.run([pred, cost], feed_dict={data_input: test_vec,
+                                                  label_input: test_labels})
 
     print("\ntest_cost: {} ".format(test_cost))
     print("end accuracy of the predictions: {0:.2f}".format(accuracy_sess * 100), '%')
 
-    predictions, _ = sess.run([pred, label_input], feed_dict={data_input: training_vec,
-                                                              label_input: training_labels})
+    # predictions, _ = sess.run(], feed_dict={data_input: training_vec,
+    #                                                           label_input: training_labels})
 
     writer.close()
     sess.close()
@@ -107,24 +134,6 @@ def neural_network(vec, labels, title='neighbour'):
     error_plot(all_costs, number_hidden_layers, learning_rate, title)
 
     return all_costs
-
-
-def initialization_based(input_array):
-    """ Return the data as one hot encoded data
-
-    input_array: numpy array, labels of the input data
-    """
-
-    # Search for the unique labels in the array
-    oh_array = np.unique(input_array, return_inverse=True)[1]
-
-    # Define the shape of the one hot encoded array
-    out = np.zeros((oh_array.shape[0], oh_array.max() + 1), dtype=int)
-
-    # Set the predicted class on 1, and all the other classes stays at 0
-    out[np.arange(out.shape[0]), oh_array] = 1
-
-    return out
 
 
 def error_plot(costs, n_hidden_layers, learning_rate, title):
@@ -135,10 +144,11 @@ def error_plot(costs, n_hidden_layers, learning_rate, title):
     n_hidden_layers: integer, number of hidden layers
     """
 
+    plt.figure()
     plt.plot(costs)
     plt.xlabel("Iterations")
     plt.ylabel("Cost function")
-    plt.title("Cost function while training the neural network \n{} hidden layers, learning rate: {}".format(
+    plt.title("Cost function while training the neural network \n{} hidden layer(s), learning rate: {}".format(
         n_hidden_layers, learning_rate))
     saving("./output_ANN/error_{}".format(title))
 
@@ -150,9 +160,27 @@ def saving(file_path):
     """
 
     index_saving = 1
-    while os.path.exists(file_path+"_{}.png".format(index_saving)):
+    while os.path.exists(file_path + "_{}.png".format(index_saving)):
         index_saving += 1
-    plt.savefig(file_path+"_{}.png".format(index_saving))
+    plt.savefig(file_path + "_{}.png".format(index_saving))
+
+
+def data_reading(data_directory):
+    """ Returns the converted H5py data set into numpy array
+
+    data_directory: string, defined path ending with the desired file name (.h5)
+    """
+
+    # Read the data
+    h5f = h5py.File(data_directory, 'r')
+
+    # The data set name is the name of the path where the data file can be found
+    data = h5f[data_directory.split('/')[-2]][:]
+
+    # Close the H5py file
+    h5f.close()
+
+    return data
 
 
 def data_parser(data_ben, data_del, snp_or_neighbour='neighbour'):
@@ -195,17 +223,48 @@ def data_parser(data_ben, data_del, snp_or_neighbour='neighbour'):
     return samples, labels
 
 
-if __name__ == "__main__":
+def initialization_based(input_array):
+    """ Return the data as one hot encoded data
 
-    directory_ben = "/mnt/scratch/kersj001/data/output/test/test_ben/"
-    ben_data = inputCNN(directory_ben).combine(directory_ben)
-    directory_del = "/mnt/scratch/kersj001/data/output/test/test_del/"
-    del_data = inputCNN(directory_del).combine(directory_del)
+    input_array: numpy array, labels of the input data
+    """
+
+    # Search for the unique labels in the array
+    oh_array = np.unique(input_array, return_inverse=True)[1]
+
+    # Define the shape of the one hot encoded array
+    out = np.zeros((oh_array.shape[0], oh_array.max() + 1), dtype=int)
+
+    # Set the predicted class on 1, and all the other classes stays at 0
+    out[np.arange(out.shape[0]), oh_array] = 1
+
+    return out
+
+
+if __name__ == "__main__":
+    # Keep track of the running time
+    start_time = time.time()
+
+    # If you do not run from the command line
+    # Read the data for both the deleterious and benign SNPs
+    # Path directory for the benign SNPs always ending with combined_ben.h5
+    data_directory_ben = "/mnt/scratch/kersj001/data/output/10_thousand_ben/combined_ben.h5"
+    # data_directory_ben = "/mnt/scratch/kersj001/data/output/test/test_ben/combined_ben.h5"
+    data_ben = data_reading(data_directory_ben)
+
+    # Path directory for the deleterious SNPs always ending with combined_del.h5
+    data_directory_del = "/mnt/scratch/kersj001/data/output/10_thousand_del/combined_del.h5"
+    # data_directory_del = "/mnt/scratch/kersj001/data/output/test/test_del/combined_del.h5"
+    data_del = data_reading(data_directory_del)
 
     # Run the neural network with the SNP of interest and its neighbouring positions
-    # samples_neighbour, labels_neighbour = data_parser(ben_data, del_data, snp_or_neighbour='neighbour')
+    # print("\n\nINCLUDES NEIGHBOURING POSITIONS\n")
+    # samples_neighbour, labels_neighbour = data_parser(data_ben, data_del, snp_or_neighbour='neighbour')
     # neural_network(samples_neighbour, labels_neighbour, title='neighbour')
 
     # Run the neural network with only the SNP of interest
-    samples_neighbour, labels_neighbour = data_parser(ben_data, del_data, snp_or_neighbour='SNP')
+    print("\n\nEXCLUDES NEIGHBOURING POSITIONS\n")
+    samples_neighbour, labels_neighbour = data_parser(data_ben, data_del, snp_or_neighbour='SNP')
     neural_network(samples_neighbour, labels_neighbour, title='SNP')
+
+    print("\n----- running time: {} seconds -----".format(round(time.time() - start_time), 2))
