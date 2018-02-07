@@ -5,6 +5,7 @@ import numpy as np
 import tensorflow as tf
 from sklearn.model_selection import train_test_split
 import matplotlib.pyplot as plt
+from optparse import OptionParser
 
 
 def shuffled_copies(samples, labels):
@@ -25,7 +26,7 @@ def shuffled_copies(samples, labels):
     return samples, labels
 
 
-def neural_network(vec, labels, title='neighbour'):
+def neural_network(vec, labels, data_size, learning_rate=0.01, title='neighbour'):
     """ Return predicted labels and actual labels with error rate and accuracy after training the fully connected
     neural network
 
@@ -42,14 +43,15 @@ def neural_network(vec, labels, title='neighbour'):
     # layer_2_units = 7
     # layer_3_units = 5
     number_hidden_layers = 1
-    learning_rate = 0.05
-    iterations = 300
+    learning_rate = learning_rate
+    iterations = 500
 
     # DATA HANDLING
     # Define training and test set
-    test_size = 0.2  # training is set on 80%
+    test_size = 0.1  # training is set on 80%
     training_vec, test_vec, training_labels, test_labels = train_test_split(vec, labels, test_size=test_size)
-    batch_size = int(training_vec.shape[0] * 0.1)  # There is chosen to use a batch size of 10%
+    batch_percentage = 0.1 # There is chosen to use a batch size of 10%
+    batch_size = int(training_vec.shape[0] * batch_percentage)
     feature_number = training_vec.shape[1]
     class_number = len(np.unique(labels))
 
@@ -75,10 +77,14 @@ def neural_network(vec, labels, title='neighbour'):
 
     with tf.variable_scope("prediction"):
         # Normalize the cost for the batch size (denominator) with euclidean distance
-        cost = tf.nn.l2_loss(pred - label_input)
+        # cost = tf.nn.l2_loss(pred - label_input)
+        cost = tf.nn.softmax_cross_entropy_with_logits(logits=pred, labels=label_input)
+        cost = tf.reduce_mean(cost) * 100
 
     with tf.variable_scope("optimizer"):
+        # minimization_step = tf.train.GradientDescentOptimizer(learning_rate=learning_rate).minimize(cost)
         minimization_step = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(cost)
+
 
     sess = tf.Session()
     sess.run(tf.global_variables_initializer())
@@ -87,56 +93,69 @@ def neural_network(vec, labels, title='neighbour'):
     # CHECKS
     # Set the range for looping to train the neural network
     all_costs = []
+    all_test_costs = []
+    all_accuracy = []
     for i in range(iterations+1):
         # To prevent slicing will be out of range
         offset = int(i * batch_size % len(training_vec))
         # Epoch wise training data shuffling
         if offset + batch_size >= len(training_vec):
             training_vec, training_labels = shuffled_copies(training_vec, training_labels)
-        # With feed_dict the placeholder is filled in
-        _, current_cost = sess.run([minimization_step, cost],
-                                   feed_dict={data_input: training_vec[:],
-                                              label_input: training_labels[:]})
-                                   # feed_dict={data_input: training_vec[offset:offset + batch_size],
-                                   #            label_input: training_labels[offset:offset + batch_size]})
 
-        all_costs.append(current_cost)
-        # Check every 10th loop what the cost is
-        if i % 10 == 0:
-            print("STEP: {} | Average cost: {}".format(i, np.mean(current_cost)))
+        # With feed_dict the placeholder is filled in
+
         # Check every 50th loop how well the prediction is
-        if i % 50 == 0:
+        if i % 100 == 0:
             pred_out, label_input_out = sess.run([pred, label_input],
                                                  feed_dict={data_input: training_vec[offset:offset + batch_size],
                                                             label_input: training_labels[offset:offset + batch_size]})
             # Compare the true labels with the predicted labels
-            print("\nlabels     : ", np.argmax(label_input_out, axis=1), )
-            print("predictions: ", np.argmax(pred_out, axis=1))
             correct_prediction = tf.equal(tf.argmax(pred_out, axis=1), tf.argmax(label_input_out, axis=1))
 
             # Check the accuracy by counting the miss-classifications
             accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
             accuracy_sess = sess.run(accuracy, feed_dict={label_input: test_labels})
             print("accuracy   :  {0:.2f}".format(accuracy_sess * 100), '%\n')
+            all_accuracy.append(accuracy_sess)
+
+        # accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
+        # accuracy_sess = sess.run(accuracy, feed_dict={label_input: test_labels})
+
+        _, current_cost = sess.run([minimization_step, cost],
+                                   # feed_dict={data_input: training_vec[offset:offset + batch_size],
+                                   #            label_input: training_labels[offset:offset + batch_size]})
+                                   feed_dict = {data_input: training_vec,
+                                                label_input: training_labels})
+        test_cost = sess.run([cost], feed_dict={data_input: test_vec,
+                                                label_input: test_labels})
+
+        # Check every 10th loop what the cost is
+        if i % 10 == 0:
+            print("STEP: {} | Average cost: {}".format(i, np.mean(current_cost)))
+
+        all_costs.append(current_cost)
+        all_test_costs.append(test_cost)
+        all_accuracy.append(accuracy_sess)
 
     predictions, test_cost = sess.run([pred, cost], feed_dict={data_input: test_vec,
-                                                  label_input: test_labels})
+                                                               label_input: test_labels})
 
-    print("\ntest_cost: {} ".format(test_cost))
+    print("\ntest_cost: {} ".format(np.mean(test_cost)))
     print("end accuracy of the predictions: {0:.2f}".format(accuracy_sess * 100), '%')
 
-    # predictions, _ = sess.run(], feed_dict={data_input: training_vec,
-    #                                                           label_input: training_labels})
+    min_test_cost = min(all_test_costs)
+    print("optimum number of iterations: ", all_test_costs.index(min_test_cost))
 
     writer.close()
     sess.close()
 
-    error_plot(all_costs, number_hidden_layers, learning_rate, title)
+    error_plot(all_costs, all_test_costs, number_hidden_layers, learning_rate, accuracy_sess, data_size, title,
+               y_axis="Cost function")
 
     return all_costs
 
 
-def error_plot(costs, n_hidden_layers, learning_rate, title):
+def error_plot(training_costs, test_costs, n_hidden_layers, learning_rate, accuracy, data_size, title, y_axis):
     """ Return plot of the decreasing error during the training of the neural network
 
     costs: list, contain error costs
@@ -145,12 +164,21 @@ def error_plot(costs, n_hidden_layers, learning_rate, title):
     """
 
     plt.figure()
-    plt.plot(costs)
+    plt.plot(training_costs, label="Training")
+    plt.plot(test_costs, label="Test")
     plt.xlabel("Iterations")
-    plt.ylabel("Cost function")
+    plt.ylabel(y_axis)
     plt.title("Cost function while training the neural network \n{} hidden layer(s), learning rate: {}".format(
         n_hidden_layers, learning_rate))
-    saving("./output_ANN/error_{}".format(title))
+    plt.figtext(0.83, 0.35, "End accuracy\n{0:.2f}%".format(accuracy * 100))
+    if title == "snp" or title == "SNP":
+        plt.figtext(0.83, 0.80, "Neighbours\nexcluded")
+    else:
+        plt.figtext(0.83, 0.80, "Neighbours\nincluded")
+    plt.legend(loc='right', bbox_to_anchor=(1.30, 0.5))
+    plt.subplots_adjust(right=0.8)
+    working_dir = os.path.dirname(os.path.abspath(__file__))
+    saving(working_dir + "/output_ANN/error_{}_{}".format(title, data_size))
 
 
 def saving(file_path):
@@ -245,26 +273,60 @@ if __name__ == "__main__":
     # Keep track of the running time
     start_time = time.time()
 
-    # If you do not run from the command line
-    # Read the data for both the deleterious and benign SNPs
-    # Path directory for the benign SNPs always ending with combined_ben.h5
-    data_directory_ben = "/mnt/scratch/kersj001/data/output/10_thousand_ben/combined_ben.h5"
-    # data_directory_ben = "/mnt/scratch/kersj001/data/output/test/test_ben/combined_ben.h5"
-    data_ben = data_reading(data_directory_ben)
-
-    # Path directory for the deleterious SNPs always ending with combined_del.h5
-    data_directory_del = "/mnt/scratch/kersj001/data/output/10_thousand_del/combined_del.h5"
-    # data_directory_del = "/mnt/scratch/kersj001/data/output/test/test_del/combined_del.h5"
-    data_del = data_reading(data_directory_del)
-
-    # Run the neural network with the SNP of interest and its neighbouring positions
-    # print("\n\nINCLUDES NEIGHBOURING POSITIONS\n")
-    # samples_neighbour, labels_neighbour = data_parser(data_ben, data_del, snp_or_neighbour='neighbour')
-    # neural_network(samples_neighbour, labels_neighbour, title='neighbour')
+    # # If you do not run from the command line
+    # # Read the data for both the deleterious and benign SNPs
+    # # Path directory for the benign SNPs always ending with combined_ben.h5
+    # # data_directory_ben = "/mnt/scratch/kersj001/data/output/10_thousand_ben/combined_ben.h5"
+    # data_directory_ben = "/mnt/scratch/kersj001/data/output/1_thousand_ben/combined_ben.h5"
+    # #
+    # # Path directory for the deleterious SNPs always ending with combined_del.h5
+    # # data_directory_del = "/mnt/scratch/kersj001/data/output/10_thousand_del/combined_del.h5"
+    # data_directory_del = "/mnt/scratch/kersj001/data/output/1_thousand_del/combined_del.h5"
+    #
+    # learning_rate = 0.01
+    # snp_neighbour = 'neighbour'
+    # # snp_neighbour = 'snp'
+    # data_size = 2000
 
     # Run the neural network with only the SNP of interest
     print("\n\nEXCLUDES NEIGHBOURING POSITIONS\n")
     samples_neighbour, labels_neighbour = data_parser(data_ben, data_del, snp_or_neighbour='SNP')
     neural_network(samples_neighbour, labels_neighbour, title='SNP')
+
+    # Run the neural network with the SNP of interest and its neighbouring positions
+    print("\n\nINCLUDES NEIGHBOURING POSITIONS\n")
+    samples_neighbour, labels_neighbour = data_parser(data_ben, data_del, snp_or_neighbour='neighbour')
+    neural_network(samples_neighbour, labels_neighbour, title='neighbour')
+
+    # Specify the options for running from the command line
+    parser = OptionParser()
+
+    # Specify the data directory for the benign and deleterious SNPs
+    parser.add_option("-b", "--ben", dest="benign", help="Path to the output of the 'combine_features.py' script that \
+            generates a H5py file with the compressed numpy array containing feature scores of benign SNPs and its \
+            neighbouring features", default="")
+    parser.add_option("-d", "--del", dest="deleterious", help="Path to the output of the 'combine_features.py' script \
+            that generates a H5py file with the compressed numpy array containing feature scores of deleterious SNPs \
+            and its neighbouring features", default="")
+    parser.add_option("-l", "--learning", dest="learning_rate", help="Float that defines the learning rate of for \
+            training the neural network", default=0.01)
+    parser.add_option("-n", "--datasize", dest="data_size", help="Integer that defines the number of samples in the \
+            data set", default=2000)
+    parser.add_option("-s", "--snp", dest="snp_neighbour", help="String that indicates if the surrounding neighbours \
+            will be included ('n') or excluded ('s')", default="n")
+
+    # Get the command line options for reading the data for both the benign and deleterious SNPs
+    (options, args) = parser.parse_args()
+    data_directory_ben = options.benign
+    data_directory_del = options.deleterious
+    learning_rate = float(options.learning_rate)
+    data_size = options.data_size
+    snp_neighbour = options.snp_neighbour
+
+    data_ben = data_reading(data_directory_ben)
+    data_del = data_reading(data_directory_del)
+
+    samples_neighbour, labels_neighbour = data_parser(data_ben, data_del, snp_or_neighbour=snp_neighbour)
+    neural_network(samples_neighbour, labels_neighbour, data_size, learning_rate=learning_rate, title=snp_neighbour)
 
     print("\n----- running time: {} seconds -----".format(round(time.time() - start_time), 2))
