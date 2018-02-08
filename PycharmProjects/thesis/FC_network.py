@@ -2,8 +2,10 @@ import time
 import h5py
 import os
 import numpy as np
+import seaborn as sns
 import tensorflow as tf
 from sklearn.model_selection import train_test_split
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 from optparse import OptionParser
 
@@ -26,12 +28,15 @@ def shuffled_copies(samples, labels):
     return samples, labels
 
 
-def neural_network(vec, labels, data_size, learning_rate=0.01, title='neighbour'):
+def neural_network(vec, labels, data_size, learning_rate=0.001, title='neighbour'):
     """ Return predicted labels and actual labels with error rate and accuracy after training the fully connected
     neural network
 
-    vec: numpy array, contains features
-    labels: one hot encoded array, contains data labels
+    vec: numpy array, contains features scores with shape (samples, number of features * number of neighbouring \
+        positions)
+    labels: one hot encoded numpy array, contains data labels
+    data_size: integer, defines the number of samples in the data
+    learning_rate: float, defines the learning rate for training the network, default=0.001
     title: string, indicate if the neural network is running with only the features of the SNP of interest or also
         includes the features of the neighbouring positions, default=neighbour
     """
@@ -43,8 +48,7 @@ def neural_network(vec, labels, data_size, learning_rate=0.01, title='neighbour'
     # layer_2_units = 7
     # layer_3_units = 5
     number_hidden_layers = 1
-    learning_rate = learning_rate
-    iterations = 500
+    iterations = 200
 
     # DATA HANDLING
     # Define training and test set
@@ -84,7 +88,6 @@ def neural_network(vec, labels, data_size, learning_rate=0.01, title='neighbour'
     with tf.variable_scope("optimizer"):
         # minimization_step = tf.train.GradientDescentOptimizer(learning_rate=learning_rate).minimize(cost)
         minimization_step = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(cost)
-
 
     sess = tf.Session()
     sess.run(tf.global_variables_initializer())
@@ -146,13 +149,113 @@ def neural_network(vec, labels, data_size, learning_rate=0.01, title='neighbour'
     min_test_cost = min(all_test_costs)
     print("optimum number of iterations: ", all_test_costs.index(min_test_cost))
 
-    writer.close()
-    sess.close()
+    weights, feature_names, plot_width = influence_weights(sess, vec, title)
+    # Create a heatmap of the weights
+    heatmap(feature_names, weights, plot_width, data_size, test_size, learning_rate, snp_neighbour)
 
+    # Create a plot of the cost function
     error_plot(all_costs, all_test_costs, number_hidden_layers, learning_rate, accuracy_sess, data_size, title,
                y_axis="Cost function")
 
+    # Close the TensorFlow session
+    writer.close()
+    sess.close()
+
     return all_costs
+
+
+def influence_weights(sess, data, snp_or_neighbour):
+    """ Returns the weights for each feature after training the neural network in a numpy array
+
+    sess: TensorFlow object, encapsulates the environment in which operation objects are executed, and Tensor objects \
+        are evaluated
+    data: numpy array, contains features scores with shape (samples, number of features * number of neighbouring \
+        positions)
+    snp_or_neighbour: string, indicate if the neural network is running with only the features of the SNP of interest \
+        or also includes the features of the neighbouring positions
+    """
+
+    # To see the names of the different layers of the neural network
+    tf.global_variables()
+    print(data.shape)
+    exit()
+    # Get the weights for a specified layer
+    layer_number = 1
+    weights = tf.get_default_graph().get_tensor_by_name('fully-connected/fc-layer{:d}/kernel:0'.format(layer_number))
+    weights = sess.run(tf.nn.top_k(weights))
+    # nn.top_k has as output [[weights][indexes to next node]], so the weights are located at position 0
+    weights_numpy = np.array(weights[0])
+
+    # Get the features names
+    feature_names, plot_width = feature_labels(data, snp_or_neighbour)
+
+    return weights_numpy, feature_names, plot_width
+
+
+def heatmap(feature_names, weights, plot_width, sample_size, test_size, learning_rate, snp_or_neighbour):
+    """ Saves a heatmap of the weights values for every features
+
+    feature_names: numpy array, containing the names of the features in string format
+    weights: numpy array, containing the weights for each feature after training the neural network
+    plot_width: integer, indicates the width for the heatmap plot
+    sample_size: integer, defines the number of samples in the data
+    test_size: float, defines the test size of the neural network
+    learning_rate: float, defines the learning rate for training the network, default=0.001
+    snp_or_neighbour: string, indicate if the neural network is running with only the features of the SNP of interest \
+        or also includes the features of the neighbouring positions
+    """
+
+    # Define the width and height of the plot
+    plt.subplots(figsize=(5 * plot_width, 5))
+    # Create the heatmap
+    sns.heatmap(data=weights.T, xticklabels=feature_names, cmap='bwr', center=0, linewidths=.5)
+    # Set the labels and title
+    plt.xlabel("Features")
+    plt.ylabel("Weights")
+    plt.title('Weights for each feature after training the neural network\n{} samples, test size of {}%, '
+              'learning rate of {}'.format(sample_size, test_size * 100, learning_rate), size=10)
+    # Plot the figure with correct lay-out
+    plt.tight_layout()
+
+    # Save the heatmap
+    working_dir = os.path.dirname(os.path.abspath(__file__))
+    saving(file_path=working_dir + "/output_ANN/heatmap/weights_{}".format(snp_or_neighbour))
+
+
+def feature_labels(data, snp_or_neighbour):
+    """ Return a numpy list containing the names of the features in string format, and the width for the heatmap plot
+
+    data: numpy array with shape (number of samples, number of features, number of nucleotides)
+    snp_or_neighbour: string, indicate if the neural network is running with only the features of the SNP of interest \
+        or also includes the features of the neighbouring positions
+    """
+
+    # Define the feature labels in correct order
+    feature_names = ['ntA', 'ntC', 'ntT', 'ntG',
+                     'phastcon_mam', 'phastcon_pri', 'phastcon_verp',
+                     'phylop_mam', 'phylop_pri', 'phylop_verp',
+                     'GerpN', 'GerpS', 'GerpRS', 'Gerp_pval']
+
+    # Get the feature names when neighbouring positions are not included
+    if snp_or_neighbour == 'SNP' or snp_or_neighbour == 'snp':
+        all_feature_names = np.array(feature_names)
+        plot_width = 1
+    # Get the feature names when neighbouring positions are included
+    else:
+        # Get the number of neighbouring nucleotides
+        n_nt = data.shape[1] / len(feature_names)
+        n_nt_downstream = int((n_nt - 1) / 2) # -1 due to excluding the SNP of interest
+        n_nt_upstream = -n_nt_downstream
+        # Get the downstream and upstream feature names
+        all_feature_names = []
+        for i in range(n_nt_upstream, n_nt_downstream+1): # +1 for including the SNP of interest
+            # Adapt the feature name list with position index behind it
+            tmp = list(map(lambda feature: feature + ' {}'.format(i), feature_names))
+            all_feature_names += tmp
+        all_feature_names = np.array(all_feature_names)
+        plot_width = n_nt_downstream
+
+    return all_feature_names, plot_width
 
 
 def error_plot(training_costs, test_costs, n_hidden_layers, learning_rate, accuracy, data_size, title, y_axis):
@@ -161,6 +264,12 @@ def error_plot(training_costs, test_costs, n_hidden_layers, learning_rate, accur
     costs: list, contain error costs
     learning_rate: float, strictness of learning while training the neural network
     n_hidden_layers: integer, number of hidden layers
+    learning_rate: float, defines the learning rate for training the network, default=0.001
+    accuracy: float, defines the end training accuracy after training the neural network
+    data_size: integer, defines the number of samples in the data
+    title: string, indicate if the neural network is running with only the features of the SNP of interest or also
+        includes the features of the neighbouring positions
+    y_axis: string, defines the name of the y-axis of the plot
     """
 
     plt.figure()
@@ -273,12 +382,12 @@ if __name__ == "__main__":
     # Keep track of the running time
     start_time = time.time()
 
-    # # If you do not run from the command line
-    # # Read the data for both the deleterious and benign SNPs
-    # # Path directory for the benign SNPs always ending with combined_ben.h5
-    # # data_directory_ben = "/mnt/scratch/kersj001/data/output/10_thousand_ben/combined_ben.h5"
+    # If you do not run from the command line
+    # Read the data for both the deleterious and benign SNPs
+    # Path directory for the benign SNPs always ending with combined_ben.h5
+    # data_directory_ben = "/mnt/scratch/kersj001/data/output/10_thousand_ben/combined_ben.h5"
     # data_directory_ben = "/mnt/scratch/kersj001/data/output/1_thousand_ben/combined_ben.h5"
-    # #
+    #
     # # Path directory for the deleterious SNPs always ending with combined_del.h5
     # # data_directory_del = "/mnt/scratch/kersj001/data/output/10_thousand_del/combined_del.h5"
     # data_directory_del = "/mnt/scratch/kersj001/data/output/1_thousand_del/combined_del.h5"
