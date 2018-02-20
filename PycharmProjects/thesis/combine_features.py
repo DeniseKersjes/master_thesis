@@ -1,13 +1,16 @@
 #!/usr/bin/env python
 """
 Author: Denise Kersjes (student number 950218-429-030)
-Date: 16 January 2018
+Date: 31 January 2018
 Script for converting features of a specific sequence into correct input for convolutional neural networks
 
-Output is a numpy array containing feature scores of a particular sequence
+Output is a H5py file with the compressed numpy array containing feature scores of a particular sequence
 """
 
+import time
 import numpy as np
+import h5py
+import pdb
 from optparse import OptionParser
 
 
@@ -98,6 +101,12 @@ class inputCNN():
                         C.append(0)
                         T.append(0)
                         G.append(1)
+                    if nt == 'N':
+                        print("WARNING: Sequence contains 'N' values")
+                        A.append(0)
+                        C.append(0)
+                        T.append(0)
+                        G.append(0)
                 # Extend the objected nucleotide list with the new sequence
                 ntA.append(A)
                 ntC.append(C)
@@ -168,8 +177,36 @@ class inputCNN():
 
         return Gerp1, Gerp2
 
-    def combine(self, data_directory):
+    def saving(self, out_array, data_directory, file_name):
+        """ Writing the nunmpy array containing the data to H5py format
+
+        out_array: numpy array of shape (number of samples, number of feature, number of nucleotides), contains the\
+         final output of this script
+        data_directory: string, working directory where the data can be found
+        file_name: string, desired file name for the H5py file ending with .py
+
+        Defined variable:
+        write_output: HDF5 data file, containing a compressed version of the numpy array from 'out_array'
+        """
+
+        # Create a file in the chosen output directory using the latest version of H5py
+        h5f = h5py.File(data_directory+file_name, 'w')
+
+        # Write the data to H5py
+        # The name of the data set file is equal to the name of the path where the data is coming from
+        write_output = h5f.create_dataset(data_directory.split('/')[-2], data=out_array)
+
+        # Check if the data is written properly
+        print(write_output)
+
+        # Close the H5py file
+        h5f.close()
+
+    def combine(self, data_directory, file_name):
         """ Return numpy array of floats (or Nans) to store the different features scores of a particular sequence.
+
+        data_directory: string, working directory where the data can be found
+        file_name: string, desired file name for the H5py file ending with .py
 
         Defined variables:
         ntA: list of lists, containing boolean numbers to indicate where adenine's are located in a particular sequence
@@ -192,11 +229,11 @@ class inputCNN():
 
         # Get the nucleotides scores
         ntA, ntC, ntT, ntG = self.nt_features(self.genome)
-
-        # Get the PhastCon scores and the PhyloP scores
+        # Get the PhastCon scores
         phastcon_mam = self.phastcon_phylop_scores(self.phastcon_mam)
         phastcon_pri = self.phastcon_phylop_scores(self.phastcon_pri)
         phastcon_verp = self.phastcon_phylop_scores(self.phastcon_verp)
+        # Get the PhyloP scores
         phylop_mam = self.phastcon_phylop_scores(self.phylop_mam)
         phylop_pri = self.phastcon_phylop_scores(self.phylop_pri)
         phylop_verp = self.phastcon_phylop_scores(self.phylop_verp)
@@ -211,29 +248,46 @@ class inputCNN():
                           GerpN, GerpS, GerpRS, Gerp_pval))
 
         # Convert the zipped list into a numpy array of floats
-        input_format = np.array(zipped, dtype='float')
+        try:
+            input_format = np.array(zipped, dtype='float')
+        except:
+            pdb.set_trace()
 
-        # print(input_format)
+        # Save the numpy array to H5py format
+        self.saving(input_format, data_directory, file_name)
+
         return input_format
 
 
 if __name__ == "__main__":
+    # # Defined data directories for if you do not run from the command line;
+    # # all the option-parsers should be switch of then
+    # data_directory = "/mnt/scratch/kersj001/data/output/test/test_ben2/"
+    # out_directory = "combined_del.h5"
 
-    # data_directory = "/mnt/scratch/kersj001/data/output/test/test_ben/"
+    # Keep track of the running time
+    start_time = time.time()
 
     # Specify the options for running from the command line
     parser = OptionParser()
     # Specify the data directory
-    parser.add_option("-p", "--path", dest="path", help="Path to the output of the 'find_sequence.py' script that\
-     finds for genomic locations the associated sequences and annotations within a defined window size upstream and\
-      downstream of the query location.", default="")
+    parser.add_option("-p", "--path", dest="path", help="Path to the output of the 'find_sequence.py' script that \
+     finds for genomic locations the associated sequences and annotations within a defined window size upstream and \
+     downstream of the query location.", default="")
+    # Specify the output file name
+    parser.add_option("-o", "--output", dest="output", help="Desired file name for the H5py output file ending with \
+     .py", default="")
 
     # Get the command line options
     (options, args) = parser.parse_args()
     data_directory = options.path
+    file_name = options.output
 
     # Run the main function
-    in_array = inputCNN(data_directory).combine(data_directory)
-    print(in_array)
+    inputCNN(data_directory).combine(data_directory, file_name)
 
+    print("----- {} seconds -----".format(round(time.time() - start_time), 2))
 
+    # # Example for running from the command line:
+    # python PycharmProjects/thesis/combine_features.py --path /mnt/scratch/kersj001/data/output/1_mil_ben/ \
+    #     --output combined_ben.h5
