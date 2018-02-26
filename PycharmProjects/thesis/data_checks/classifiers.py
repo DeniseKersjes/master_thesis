@@ -23,7 +23,7 @@ from optparse import OptionParser
 
 def tests(clf_name, data_ben, data_del, data_ben_val, data_del_val, data_size, SNP_or_neighbour='n',
           kernel_size="N.A."):
-    """ Fucntion reshaped the data in order to perform classification with and without neighbouring positions
+    """ Function reshaped the data in order to perform classification with and without neighbouring positions
 
     clf_name: string, defines which classifier should be run
     data_ben: numpy array with shape (number of samples, number of features, number of nucleotides), the samples are\
@@ -33,9 +33,9 @@ def tests(clf_name, data_ben, data_del, data_ben_val, data_del_val, data_size, S
     data_ben_val: numpy array with shape (number of samples, number of features, number of nucleotides), the samples \
      are validation benign samples obtained from the Exon Sequencing Project
     data_del_val: numpy array with shape (number of samples, number of features, number of nucleotides), the samples \
-     are validation deletrious samples obtained from the ClinVar database
+     are validation deleterious samples obtained from the ClinVar database
     data_size: integer, defines the number of samples in the data
-    SNP_or_neighbour: string, indicates if the classifer will run with only the features of the SNP of interest or \
+    SNP_or_neighbour: string, indicates if the classifier will run with only the features of the SNP of interest or \
      also includes the features of the neighbouring positions
     kernel_size: float or string, indicated the kernel size for the support vector machine classifier with radial \
      basis function (other classifiers do not need a specific kernel size), default="N.A."
@@ -158,13 +158,19 @@ def classifier(clf_name, samples, labels, samples_val, labels_val, n_samples, ti
         # Get only the prediction of one class to perform the 'roc_auc_score' function
         predictions_class1 = predictions_scores[:, 1]
         ROC_AUC = roc_auc_score(y_true=labels_val, y_score=predictions_class1)
+    elif clf_name == "Logistic regression":
+        print("test")
+        predictions_scores = clf.decision_function(X=samples_val)
+        ROC_AUC = roc_auc_score(y_true=labels_val, y_score=predictions_scores)
+        # Create a heatmap of the coefficients of the logistic regression model
+        coefficients(clf, title, n_samples)
     else:
         predictions_scores = clf.decision_function(X=samples_val)
         ROC_AUC = roc_auc_score(y_true=labels_val, y_score=predictions_scores)
 
     # Write a text file in the right directory for saving the result of the classifier
     working_dir = os.path.dirname(os.path.abspath(__file__))
-    file_name = working_dir + "/output/CV_classifiers/{}/accuracy_{}".format(save_name, data_size)
+    file_name = working_dir + "/output/CV_classifiers/{}/accuracy_{}_val+ROC".format(save_name, data_size)
     file_name = saving(file_name)
     writing(clf_name, file_name, accuracy, std, kernel_size, n_samples, title, accuracy_val, ROC_AUC)
 
@@ -239,24 +245,50 @@ def cross_validation(clf, samples, labels):
     return clf, all_scores
 
 
-def saving(file_path, format_type="txt"):
+def coefficients(clf, title, data_size):
+    """ Save the coefficients after fitting the classification model
+
+    clf: sklearn class, defines the classifier model
+    title: string, indicates if the classifier was run with only the features of the SNP of interest or also includes \
+     the features of the neighbouring positions
+    data_size: integer, defines the number of samples in the data
+    """
+
+    # Get the coefficients of features after training the classifier and convert it into an 1D numpy array
+    coef = clf.coef_.ravel()
+
+    # Get the working directory of this script
+    working_dir = os.path.dirname(os.path.abspath(__file__))
+    # Get the file name for saving the numpy array
+    file_name = working_dir + "/output/CV_classifiers/clf_HDF5_files/weights_{}_{}".format(title, data_size)
+    file_name = saving(file_name, format_type='h5', save=False)
+    # Save the numpy array as HDF5 file
+    h5f = h5py.File(file_name, 'w')
+    h5f.create_dataset('dataset_{}'.format(data_size), data=coef)
+
+
+def saving(file_path, format_type="txt", save=True):
     """ Create a .txt file with header line for saving the output values of the classifier
 
     file_path: string, directory where the .txt file can be written to
     format_type: string, type of the created file, default="txt"
+    save: boolean, indicates if the file should be stored in the specified directory, default=True
     """
 
     # Get an unique file name
     index_saving = 1
-    while os.path.exists(file_path+"_val+ROC_{}.{}".format(index_saving, format_type)):
+    while os.path.exists(file_path+"_{}.{}".format(index_saving, format_type)):
         index_saving += 1
 
-    # Write the header line for the created file name
-    file_name = os.path.join(file_path+"_val+ROC_{}.{}".format(index_saving, format_type))
-    with open(file_name, 'w') as file:
-        file.write("classifier\tincluding or excluding neighbours\tdata size\tkernel size\taccuracy\t"
-                   "standard deviation\taccuracy validation\tROC-AUC")
-        file.close()
+    if save == True:
+        # Write the header line for the created file name
+        file_name = os.path.join(file_path+"_{}.{}".format(index_saving, format_type))
+        with open(file_name, 'w') as file:
+            file.write("classifier\tincluding or excluding neighbours\tdata size\tkernel size\taccuracy\t"
+                       "standard deviation\taccuracy validation\tROC-AUC")
+            file.close()
+    else:
+        return file_path+"_{}.{}".format(index_saving, format_type)
 
     return file_name
 
@@ -335,7 +367,7 @@ if __name__ == "__main__":
     # data_directory_del_val = "/mnt/scratch/kersj001/data/output/ClinVar_del/combined_del.h5"
     #
     # data_size = 2000
-    # snp_neighbour = 's'
+    # snp_neighbour = 'ns'
     # clf_name = 'log'
     # kernel_size = ""
     # try:
