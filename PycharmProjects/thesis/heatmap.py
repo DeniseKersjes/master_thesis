@@ -34,7 +34,7 @@ def get_weights(snp_or_neighbour, n_nt, data_path):
     working_dir = os.path.dirname(os.path.abspath(__file__))
     path_name = working_dir + data_path
     # Get the data for every file with the correct name in the specified directory
-    for file in glob.glob(path_name+'weights_{}_*'.format(snp_or_neighbour)):
+    for file in glob.glob(path_name):
         # Read the h5py file back to a numpy array
         h5f = h5py.File(file, 'r')
         # Get the correct data for every dataset varying in data size
@@ -181,22 +181,36 @@ if __name__ == "__main__":
         plot_width = n_nt
 
     # Specify the classifier
-    classifier = "logistic regression"
-    # classifier = "neural network"
+    # classifier = "logistic regression"
+    classifier = "neural network"
+
+    # Define if you want to use absolute values or not
+    abs = True
 
     # Get the data directory and output variables for the defined classifier
     if classifier == "logistic regression":
-        data_path = "/data_checks/output/CV_classifiers/clf_HDF5_files/"
-        output_path = "/data_checks/output/CV_classifiers/clf_heatmap/"
-        file_name = "heatmap_coefs_{}".format(snp_or_neighbour)
         subtitle = "Logistic Regression; trained at once on whole dataset"
+
+        output_path = "/data_checks/output/CV_classifiers/clf_heatmap/"
+        if abs:
+            data_path = "/data_checks/output/CV_classifiers/clf_HDF5_files/absolute_values/weights_{}_*".format(
+                snp_or_neighbour)
+            file_name = "heatmap_abs_coefs_{}".format(snp_or_neighbour)
+        else:
+            data_path = "/data_checks/output/CV_classifiers/clf_HDF5_files/weights_{}_*".format(snp_or_neighbour)
+            file_name = "heatmap_coefs_{}".format(snp_or_neighbour)
+
     elif classifier == "neural network":
-        data_path = "/output_ANN/HDF5_files/"
-        output_path = "/output_ANN/heatmap/"
-        file_name = "weights_multiple_{}".format(snp_or_neighbour)
         test_size = 10
         learning_rate = 0.01
         subtitle = "Neural Network; test size of {}%, learning rate of {}".format(test_size, learning_rate)
+        output_path = "/output_ANN/heatmap/"
+        if abs:
+            data_path = "/output_ANN/HDF5_files/absolute_values/weights_{}_*".format(snp_or_neighbour)
+            file_name = "heatmap_abs_weights_{}".format(snp_or_neighbour)
+        else:
+            data_path = "/output_ANN/HDF5_files/weights_{}_*".format(snp_or_neighbour)
+            file_name = "heatmap_weights_{}".format(snp_or_neighbour)
 
     # Get the weights of samples for making a heatmap
     weights = get_weights(snp_or_neighbour, n_nt, data_path)
