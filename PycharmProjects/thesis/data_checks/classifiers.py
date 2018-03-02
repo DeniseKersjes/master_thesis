@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """
 Author: Denise Kersjes (student number 950218-429-030)
-Date: 26 February 2018
+Date: 2 March 2018
 Script for performing Support Vector Machine, Logistic Regression, Decision Tree, and Random Forest classification
 
 Output is .txt file containing the test accuracy with the standard deviation and the validation accuracy for a \
@@ -158,12 +158,6 @@ def classifier(clf_name, samples, labels, samples_val, labels_val, n_samples, ti
         # Get only the prediction of one class to perform the 'roc_auc_score' function
         predictions_class1 = predictions_scores[:, 1]
         ROC_AUC = roc_auc_score(y_true=labels_val, y_score=predictions_class1)
-    elif clf_name == "Logistic regression":
-        print("test")
-        predictions_scores = clf.decision_function(X=samples_val)
-        ROC_AUC = roc_auc_score(y_true=labels_val, y_score=predictions_scores)
-        # Create a heatmap of the coefficients of the logistic regression model
-        coefficients(clf, title, n_samples)
     else:
         predictions_scores = clf.decision_function(X=samples_val)
         ROC_AUC = roc_auc_score(y_true=labels_val, y_score=predictions_scores)
@@ -245,34 +239,11 @@ def cross_validation(clf, samples, labels):
     return clf, all_scores
 
 
-def coefficients(clf, title, data_size):
-    """ Save the coefficients after fitting the classification model
-
-    clf: sklearn class, defines the classifier model
-    title: string, indicates if the classifier was run with only the features of the SNP of interest or also includes \
-     the features of the neighbouring positions
-    data_size: integer, defines the number of samples in the data
-    """
-
-    # Get the coefficients of features after training the classifier and convert it into an 1D numpy array
-    coef = clf.coef_.ravel()
-
-    # Get the working directory of this script
-    working_dir = os.path.dirname(os.path.abspath(__file__))
-    # Get the file name for saving the numpy array
-    file_name = working_dir + "/output/CV_classifiers/clf_HDF5_files/weights_{}_{}".format(title, data_size)
-    file_name = saving(file_name, format_type='h5', save=False)
-    # Save the numpy array as HDF5 file
-    h5f = h5py.File(file_name, 'w')
-    h5f.create_dataset('dataset_{}'.format(data_size), data=coef)
-
-
-def saving(file_path, format_type="txt", save=True):
+def saving(file_path, format_type="txt"):
     """ Create a .txt file with header line for saving the output values of the classifier
 
     file_path: string, directory where the .txt file can be written to
     format_type: string, type of the created file, default="txt"
-    save: boolean, indicates if the file should be stored in the specified directory, default=True
     """
 
     # Get an unique file name
@@ -280,15 +251,12 @@ def saving(file_path, format_type="txt", save=True):
     while os.path.exists(file_path+"_{}.{}".format(index_saving, format_type)):
         index_saving += 1
 
-    if save == True:
-        # Write the header line for the created file name
-        file_name = os.path.join(file_path+"_{}.{}".format(index_saving, format_type))
-        with open(file_name, 'w') as file:
-            file.write("classifier\tincluding or excluding neighbours\tdata size\tkernel size\taccuracy\t"
-                       "standard deviation\taccuracy validation\tROC-AUC")
-            file.close()
-    else:
-        return file_path+"_{}.{}".format(index_saving, format_type)
+    # Write the header line for the created file name
+    file_name = os.path.join(file_path+"_{}.{}".format(index_saving, format_type))
+    with open(file_name, 'w') as file:
+        file.write("classifier\tincluding or excluding neighbours\tdata size\tkernel size\taccuracy\t"
+                    "standard deviation\taccuracy validation\tROC-AUC")
+        file.close()
 
     return file_name
 
@@ -347,37 +315,40 @@ def data_reading(data_directory):
     return data
 
 
-if __name__ == "__main__":
+def get_arguments():
+    """ Return the arguments given on the command line
+    """
 
-    # Keep track of the running time
-    start_time_script = time.time()
-
-    # # If you do not run from the command line
-    # # Read the data for both the deleterious and benign SNPs
-    # # Path directory for the benign SNPs always ending with combined_ben.h5
-    # # data_directory_ben = "/mnt/scratch/kersj001/data/output/1_mil_ben3/combined_ben.h5"
-    # # data_directory_ben = "/mnt/scratch/kersj001/data/output/10_thousand_ben/combined_ben.h5"
+    # If you do not run from the command line
+    """
+    # Read the data for both the deleterious and benign SNPs
+    # Path directory for the benign SNPs always ending with combined_ben.h5
+    # data_directory_ben = "/mnt/scratch/kersj001/data/output/1_mil_ben3/combined_ben.h5"
+    # data_directory_ben = "/mnt/scratch/kersj001/data/output/10_thousand_ben/combined_ben.h5"
     # data_directory_ben = "/mnt/scratch/kersj001/data/output/1_thousand_ben/combined_ben.h5"
-    # data_directory_ben_val = "/mnt/scratch/kersj001/data/output/ClinVar_ben/combined_ben.h5"
-    #
-    # # Path directory for the deleterious SNPs always ending with combined_del.h5
-    # # data_directory_del = "/mnt/scratch/kersj001/data/output/1_mil_del/combined_del.h5"
-    # # data_directory_del = "/mnt/scratch/kersj001/data/output/10_thousand_del/combined_del.h5"
+    data_directory_ben = "/mnt/scratch/kersj001/data/output/test/test_ben2/combined_ben.h5"
+    data_directory_ben_val = "/mnt/scratch/kersj001/data/output/ClinVar_ben/combined_ben.h5"
+    
+
+    # Path directory for the deleterious SNPs always ending with combined_del.h5
+    # data_directory_del = "/mnt/scratch/kersj001/data/output/1_mil_del/combined_del.h5"
+    # data_directory_del = "/mnt/scratch/kersj001/data/output/10_thousand_del/combined_del.h5"
     # data_directory_del = "/mnt/scratch/kersj001/data/output/1_thousand_del/combined_del.h5"
-    # data_directory_del_val = "/mnt/scratch/kersj001/data/output/ClinVar_del/combined_del.h5"
-    #
-    # data_size = 2000
-    # snp_neighbour = 'ns'
-    # clf_name = 'log'
-    # kernel_size = ""
-    # try:
-    #     kernel_size = float(kernel_size)
-    # except:
-    #     kernel_size = "N.A."
+    data_directory_del = "/mnt/scratch/kersj001/data/output/test/test_del2/combined_del.h5"
+    data_directory_del_val = "/mnt/scratch/kersj001/data/output/ClinVar_del/combined_del.h5"
+
+    data_size = 20
+    snp_neighbour = 'ns'
+    clf_name = 'log'
+    kernel_size = ""
+    try:
+        kernel_size = float(kernel_size)
+    except:
+        kernel_size = "N.A."
+    """
 
     # Specify the options for running from the command line
     parser = OptionParser()
-
     # Specify the data directory for the benign and deleterious SNPs
     parser.add_option("-b", "--ben", dest="benign", help="Path to the output of the 'combine_features.py' script that \
         generates a H5py file with the compressed numpy array containing feature scores of benign SNPs and its \
@@ -412,9 +383,22 @@ if __name__ == "__main__":
     snp_neighbour = options.snp_neighbour
     # Get the correct (type of the) kernel size
     try:
-      kernel_size = float(options.kernel_size)
+        kernel_size = float(options.kernel_size)
     except:
-      kernel_size = "N.A."
+        kernel_size = "N.A."
+
+    return data_directory_ben, data_directory_del, data_directory_ben_val, data_directory_del_val, data_size, \
+           clf_name, snp_neighbour, kernel_size
+
+
+if __name__ == "__main__":
+
+    # Keep track of the running time
+    start_time_script = time.time()
+
+    # Get the given arguments
+    data_directory_ben, data_directory_del, data_directory_ben_val, data_directory_del_val, data_size, clf_name, \
+    snp_neighbour, kernel_size = get_arguments()
 
     # Read the HDF5 file back to a numpy array
     data_ben = data_reading(data_directory_ben)
@@ -435,8 +419,8 @@ if __name__ == "__main__":
     # Get the complete running time of the script
     print("----- {} seconds -----".format(round(time.time() - start_time_script), 2))
 
+    # Example for running from the command line
     """
-    Example for running from the command line:
     python PycharmProjects/thesis/data_checks/classifiers.py 
      --ben /mnt/scratch/kersj001/data/output/100_thousand_ben/combined_ben.h5 
      --del /mnt/scratch/kersj001/data/output/100_thousand_del/combined_del.h5 
