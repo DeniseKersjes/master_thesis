@@ -143,7 +143,7 @@ if __name__ == "__main__":
     start_time = time.time()
 
     # Read the data
-    data_directory = "/mnt/scratch/kersj001/data/output/1_thousand_ben/combined_ben.h5"
+    data_directory = "/mnt/scratch/kersj001/data/output/1_thousand_2_del/"
     data = data_reading(data_directory)
 
     # Convert the data into a pandas dataframe
