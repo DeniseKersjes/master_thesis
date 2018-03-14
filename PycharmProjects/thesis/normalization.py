@@ -53,8 +53,8 @@ def feature_labels(n_nt_downstream):
 
     # Define the feature labels in correct order
     feature_names = ['ntA', 'ntC', 'ntT', 'ntG',
-                     'phastcon_mam', 'phastcon_pri', 'phastcon_verp',
-                     'phylop_mam', 'phylop_pri', 'phylop_verp',
+                     'phastcon_mam', 'phastcon_pri', 'phastcon_ver',
+                     'phylop_mam', 'phylop_pri', 'phylop_ver',
                      'GerpN', 'GerpS', 'GerpRS', 'Gerp_pval']
 
     # Get the feature names when neighbouring positions are not included
@@ -115,6 +115,32 @@ def create_dataframe(data_ben, data_del):
     return dataframe, data_shape
 
 
+def handle_nan(dataframe):
+    """ Convert the missing values as mentioned in the appendix of CADD paper (https://www.nature.com/articles/ng.2892)
+
+    dataframe: pandas dataframe, containing the features as columns and samples as rows
+    """
+
+    # Create a dictionary that indicates per feature how to impute the missing values
+    # Values are coming from the paper 'Supplementary Information for A general framework for estimating the relative
+    # pathogenicity of human genetic variants'
+    impute_values = {'ntA': 0.000, 'ntC': 0.000, 'ntT': 0.000, 'ntG': 0.000,
+                     'phastcon_mam': 0.079, 'phastcon_pri': 0.115, 'phastcon_ver': 0.094,
+                     'phylop_mam': -0.038, 'phylop_pri': -0.033, 'phylop_ver': 0.017,
+                     'GerpN': 1.909, 'GerpS': -0.200, 'GerpRS': 0.000, 'Gerp_pval': 1.000}
+
+    no_nan_df = dataframe.copy()
+    for feature_name in list(dataframe):
+        # Get the feature name without position
+        name = feature_name.split(' ')[0]
+        # Get the correct impute value
+        impute_value = impute_values[name]
+        # Replace the missing values with the impute value
+        no_nan_df[feature_name] = no_nan_df[feature_name].fillna(impute_value)
+
+    return no_nan_df
+
+
 def normalize_data(dataframe, data_shape):
     """ Normalized the data and convert the dataframe back in its original numpy array format
 
@@ -166,8 +192,8 @@ if __name__ == "__main__":
     start_time = time.time()
 
     # Get the data directory
-    data_directory_ben = "/mnt/scratch/kersj001/data/output/5/1_thousand_ben/"
-    data_directory_del = "/mnt/scratch/kersj001/data/output/5/1_thousand_del/"
+    data_directory_ben = "/mnt/scratch/kersj001/data/output/10/1_mil_ben/"
+    data_directory_del = "/mnt/scratch/kersj001/data/output/10/1_mil_del/"
 
     # Read the data
     data_ben = data_reading(data_directory_ben)
@@ -176,8 +202,11 @@ if __name__ == "__main__":
     # Convert the data into a pandas dataframe
     data_df, data_shape = create_dataframe(data_ben, data_del)
 
+    # Check for NaN values and handle those
+    df_without_nan = handle_nan(data_df)
+
     # Normalize the data
-    normalized = normalize_data(data_df, data_shape)
+    normalized = normalize_data(df_without_nan, data_shape)
 
     # Write the normalized data to the desired output directory
     output_directory = "/mnt/scratch/kersj001/data/output/normalized_data/"
