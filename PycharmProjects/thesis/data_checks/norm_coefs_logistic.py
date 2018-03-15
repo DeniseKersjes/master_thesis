@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 """
 Author: Denise Kersjes (student number 950218-429-030)
-Date: 2 March 2018
+Date of creation: 13 March 2018
+Date of last edit: 15 March 2018
 Script for visualisation of the feature coefficient after performing Logistic Regression
 
 Output is .h5 file containing a compressed numpy array of feature coefficients from the logistic regression classifier
@@ -12,8 +13,8 @@ import os
 import h5py
 import numpy as np
 from sklearn import linear_model
+from sklearn.metrics import roc_auc_score, accuracy_score
 from optparse import OptionParser
-from sklearn.metrics import roc_auc_score
 
 
 def data_reading(data_file):
@@ -80,7 +81,7 @@ def data_labels(data):
     return labels
 
 
-def logistic_regression(samples, labels, samples_val, labels_val):
+def logistic_regression(samples, labels, samples_val, labels_val, n_samples, n_neighbours=0, title=''):
     """ Perform logistic regression classification and stores the obtained feature coefficients as an HDF5 file
 
     samples: numpy array, contains features scores with shape (samples, number of features * number of neighbouring \
@@ -89,7 +90,9 @@ def logistic_regression(samples, labels, samples_val, labels_val):
     samples_val: numpy array, contains features scores with shape (validation samples, number of features * number of \
      neighbouring positions)
     labels_val: numpy array, contains data labels corresponding to the validation samples
-
+    n_samples: integer, correspond to the number of samples in the data set
+    n_neighbours: integer, indicates how many neighbouring positions are included, default=0 (SNP of interest only)
+    title: string, indicates if neighbouring positions are include or excluded in the data while running the classifier
     """
 
     # Specify the classifier
@@ -101,12 +104,46 @@ def logistic_regression(samples, labels, samples_val, labels_val):
     # Get the coefficients for each feature
     coef = clf.coef_.ravel()
 
-    # Check the accuracy of the classifier
-    predictions_scores = clf.decision_function(X=samples_val)
-    ROC_AUC = roc_auc_score(y_true=labels_val, y_score=predictions_scores)
-    print("{:.2f}%\n".format(ROC_AUC*100))
+    # Get the training accuracy in percentages
+    predictions_train = clf.predict(X=samples)
+    accuracy_train = (accuracy_score(y_true=labels, y_pred=predictions_train))*100
+    scores_train = clf.decision_function(X=samples)
+    ROC_AUC_train = (roc_auc_score(y_true=labels, y_score=scores_train))*100
+
+    # Check the validation accuracy in percentages
+    predictions_val = clf.predict(X=samples_val)
+    accuracy_val = (accuracy_score(y_true=labels_val, y_pred=predictions_val))*100
+    scores_val = clf.decision_function(X=samples_val)
+    ROC_AUC_val = (roc_auc_score(y_true=labels_val, y_score=scores_val))*100
+
+    # Store the statistical outcomes
+    store_statistics(accuracy_train, ROC_AUC_train, accuracy_val, ROC_AUC_val, n_samples, n_neighbours, title)
 
     return coef
+
+
+def store_statistics(accuracy_train, ROC_AUC_train, accuracy_val, ROC_AUC_val, n_samples, n_neighbours, title):
+    """ Write the statistical results to the desired .txt file
+
+    accuracy_train: float, training accuracy after fitting the logistic regression classifier
+    ROC_AUC_train: float, ROC AUC score of the training after fitting the logistic regression classifier
+    accuracy_val: float, validation accuracy after fitting the logistic regression classifier
+    ROC_AUC_val: float, ROC AUC score of the validation samples after fitting the logistic regression classifier
+    n_samples: integer, correspond to the number of samples in the data set
+    n_neighbours: integer, indicates how many neighbouring positions are included
+    title: string, indicates if neighbouring positions are include or excluded in the data while running the classifier
+    """
+
+    # Get the file name where the statistical results will be written to
+    working_dir = os.path.dirname(os.path.abspath(__file__))
+    file_name = working_dir + "/output/norm_accuracy.txt"
+
+    # Extend the file with the results in the corresponding data types
+    with open(file_name, 'a') as output:
+        output.write("\n{:d}\t{:s}\t{:d}\t{:.2f}\t{:.2f}\t{:.2f}\t{:.2f}".format(n_samples, title, n_neighbours,
+                     accuracy_train, accuracy_val, ROC_AUC_train, ROC_AUC_val))
+
+    output.close()
 
 
 def write_output(coefs, data_size, n_neighbours=0):
@@ -152,10 +189,10 @@ def get_arguments():
     """
 
     # # If you do not run from the command line
-    # # Read the data
-    # data_directory = "/mnt/scratch/kersj001/data/output/normalized_data/15_200000.h5"
-    # val_data_directory = "/mnt/scratch/kersj001/data/output/normalized_data/15_26172.h5"
+    # data_directory = "/mnt/scratch/kersj001/data/output/normalized_data/5_200000.h5"
+    # val_data_directory = "/mnt/scratch/kersj001/data/output/normalized_data/5_26172.h5"
 
+    # Read the data
     # Specify the options for running from the command line
     parser = OptionParser()
     # Specify the data directory for the benign and deleterious SNPs
@@ -200,9 +237,10 @@ if __name__ == "__main__":
     # Run the  logistic regression classifier for samples containing only the data of the SNP of interest and also for
     # the samples including neighbouring positional data
     print("NEIGHBOURS EXCLUDED")
-    weights_snp = logistic_regression(snp_data, labels_data, val_snp_data, labels_val)
+    weights_snp = logistic_regression(snp_data, labels_data, val_snp_data, labels_val, data_size, title='excluding')
     print("NEIGHBOURS INCLUDED")
-    weights_neighbour = logistic_regression(neighbour_data, labels_data, val_neighbour_data, labels_val)
+    weights_neighbour = logistic_regression(neighbour_data, labels_data, val_neighbour_data, labels_val, data_size,
+                                            n_neighbours=n_neighbours, title='including')
 
     # Write the output to a HDF5 file
     write_output(weights_snp, data_size)
