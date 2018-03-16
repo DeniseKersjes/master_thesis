@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 """
 Author: Denise Kersjes (student number 950218-429-030)
-Date: 2 March 2018
+Date of creation: 2 March 2018
+Date of last edit: 2 March 2018
 Script for converting the feature weights to absolute weights
 
 Output are H5py files with the compressed numpy array containing absolute feature weights
@@ -25,7 +26,7 @@ def convert_weights(data_path):
     working_dir = os.path.dirname(os.path.abspath(__file__))
     path_name = working_dir + data_path
     # Get the data for every file with the correct name in the specified directory
-    for file in glob.glob(path_name + 'weights_*'):
+    for file in glob.glob(path_name + '*weights_*'):
         # Check if the file is already converted to absolute values
         file_name = file.split("/")[-1]
         absolute_file = Path(working_dir + data_path + "/absolute_values/{}".format(file_name))
@@ -56,8 +57,8 @@ if __name__ == "__main__":
     start_time = time.time()
 
     # Get the directory containing files with weight values
-    data_path = "/data_checks/output/CV_classifiers/clf_HDF5_files/"
-    # data_path = "/output_ANN/HDF5_files/"
+    # data_path = "/data_checks/output/CV_classifiers/clf_HDF5_files/normalized_logistic/"
+    data_path = "/output_ANN/HDF5_files/normalized_ANN/"
 
     # Get the file names with weight values and convert them to absolute weight values
     convert_weights(data_path)
