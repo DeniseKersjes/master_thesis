@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 """
 Author: Denise Kersjes (student number 950218-429-030)
-Date: 2 March 2018
+Date of creation: 2 March 2018
+Date of last edit: 14 March 2018
 Script for creating a heatmap of specified data values
 
 Output is .png file containing the heatmap of specified samples
@@ -18,11 +19,9 @@ import matplotlib.pyplot as plt
 from sortedcontainers import SortedDict
 
 
-def get_weights(snp_or_neighbour, n_nt, data_path):
+def get_weights(n_nt, data_path):
     """ Create a pandas dataframe of the specified data that will be used for creating the heatmap
 
-    snp_or_neighbour: string, indicates if the classifier will run with only the features of the SNP of interest or \
-     also includes the features of the neighbouring positions
     n_nt: integer, indicates how many neighbouring positions for both upstream and downstream of the SNP are considered
     data_path: string, directory where the data can be found
     """
@@ -95,8 +94,8 @@ def feature_labels(n_nt_downstream):
 
     # Define the feature labels in correct order
     feature_names = ['ntA', 'ntC', 'ntT', 'ntG',
-                     'phastcon_mam', 'phastcon_pri', 'phastcon_verp',
-                     'phylop_mam', 'phylop_pri', 'phylop_verp',
+                     'phastcon_mam', 'phastcon_pri', 'phastcon_ver',
+                     'phylop_mam', 'phylop_pri', 'phylop_ver',
                      'GerpN', 'GerpS', 'GerpRS', 'Gerp_pval']
 
     # Get the feature names when neighbouring positions are not included
@@ -169,14 +168,14 @@ if __name__ == "__main__":
     start_time = time.time()
 
     # Specify if you want a heatmap that considers neighbouring positions and how many
-    snp_or_neighbour = "snp"
-    n_nt = 0
-    # snp_or_neighbour = "neighbour"
-    # n_nt = 5
+    n_nt = 5
+    # n_nt = 0
 
     # The width of the plot will in increase linearly with the number of considered neighbouring positions
     if n_nt == 0:
         plot_width = 1
+    elif n_nt == 1:
+        plot_width = 1.5
     else:
         plot_width = n_nt
 
@@ -190,30 +189,30 @@ if __name__ == "__main__":
     # Get the data directory and output variables for the defined classifier
     if classifier == "logistic regression":
         subtitle = "Logistic Regression; trained at once on whole dataset"
-
         output_path = "/data_checks/output/CV_classifiers/clf_heatmap/"
         if abs:
-            data_path = "/data_checks/output/CV_classifiers/clf_HDF5_files/absolute_values/weights_{}_*".format(
-                snp_or_neighbour)
-            file_name = "heatmap_abs_coefs_{}".format(snp_or_neighbour)
+            data_path = "/data_checks/output/CV_classifiers/clf_HDF5_files/normalized_logistic/absolute_values/" \
+                        "{}_norm_weights_*".format(n_nt)
+            file_name = "{}_heatmap_abs_norm_weights".format(n_nt)
         else:
-            data_path = "/data_checks/output/CV_classifiers/clf_HDF5_files/weights_{}_*".format(snp_or_neighbour)
-            file_name = "heatmap_coefs_{}".format(snp_or_neighbour)
+            data_path = "/data_checks/output/CV_classifiers/clf_HDF5_files/normalized_logistic/{}_norm_weights_*".\
+                format(n_nt)
+            file_name = "{}_heatmap_norm_weights".format(n_nt)
 
     elif classifier == "neural network":
         test_size = 10
-        learning_rate = 0.01
+        learning_rate = 0.001
         subtitle = "Neural Network; test size of {}%, learning rate of {}".format(test_size, learning_rate)
         output_path = "/output_ANN/heatmap/"
         if abs:
-            data_path = "/output_ANN/HDF5_files/absolute_values/weights_{}_*".format(snp_or_neighbour)
-            file_name = "heatmap_abs_weights_{}".format(snp_or_neighbour)
+            data_path = "/output_ANN/HDF5_files/normalized_ANN/absolute_values/{}_norm_ANNweights_*".format(n_nt)
+            file_name = "{}_ANNheatmap_abs_norm_weights".format(n_nt)
         else:
-            data_path = "/output_ANN/HDF5_files/weights_{}_*".format(snp_or_neighbour)
-            file_name = "heatmap_weights_{}".format(snp_or_neighbour)
+            data_path = "/output_ANN/HDF5_files/normalized_ANN/{}_norm_ANNweights_*".format(n_nt)
+            file_name = "{}_ANNheatmap_norm_weights".format(n_nt)
 
     # Get the weights of samples for making a heatmap
-    weights = get_weights(snp_or_neighbour, n_nt, data_path)
+    weights = get_weights(n_nt, data_path)
 
     # Create the heatmap
     heatmap(weights, plot_width, subtitle, output_path, file_name)
