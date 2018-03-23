@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 """
 Author: Denise Kersjes (student number 950218-429-030)
-Date: 31 January 2018
+Date of creation: 8 January 2018
+Date of last edit: 20 March 2018
 Script for converting features of a specific sequence into correct input for convolutional neural networks
 
 Output is a H5py file with the compressed numpy array containing feature scores of a particular sequence
@@ -86,27 +87,29 @@ class inputCNN():
                         C.append(0)
                         T.append(0)
                         G.append(0)
-                    if nt == 'C':
+                    elif nt == 'C':
                         A.append(0)
                         C.append(1)
                         T.append(0)
                         G.append(0)
-                    if nt == 'T':
+                    elif nt == 'T':
                         A.append(0)
                         C.append(0)
                         T.append(1)
                         G.append(0)
-                    if nt == 'G':
+                    elif nt == 'G':
                         A.append(0)
                         C.append(0)
                         T.append(0)
                         G.append(1)
-                    if nt == 'N':
-                        print("WARNING: Sequence contains 'N' values")
+                    # In the data N and M nucleotides codes occurs
+                    elif nt == 'N' or nt == 'M':
+                        print("WARNING: Sequence contains other IUPAC nucleotide codes")
                         A.append(0)
                         C.append(0)
                         T.append(0)
                         G.append(0)
+
                 # Extend the objected nucleotide list with the new sequence
                 ntA.append(A)
                 ntC.append(C)
@@ -247,6 +250,11 @@ class inputCNN():
                           phylop_mam, phylop_pri, phylop_verp,
                           GerpN, GerpS, GerpRS, Gerp_pval))
 
+        # # Zipped order based on weight influence
+        # # Zip the feature scores lists in the way that the scores are sorted per sequence
+        # zipped = list(zip(phastcon_pri, phylop_verp, phylop_pri, phastcon_mam, GerpS, phastcon_verp, GerpN, phylop_mam,
+        #                   ntC, ntG, ntT, ntA, GerpRS, Gerp_pval))
+
         # Convert the zipped list into a numpy array of floats
         try:
             input_format = np.array(zipped, dtype='float')
@@ -260,28 +268,39 @@ class inputCNN():
 
 
 if __name__ == "__main__":
-    # # Defined data directories for if you do not run from the command line;
-    # # all the option-parsers should be switch of then
-    # data_directory = "/mnt/scratch/kersj001/data/output/test/test_ben2/"
-    # out_directory = "combined_del.h5"
-
     # Keep track of the running time
     start_time = time.time()
 
-    # Specify the options for running from the command line
-    parser = OptionParser()
-    # Specify the data directory
-    parser.add_option("-p", "--path", dest="path", help="Path to the output of the 'find_sequence.py' script that \
-     finds for genomic locations the associated sequences and annotations within a defined window size upstream and \
-     downstream of the query location.", default="")
-    # Specify the output file name
-    parser.add_option("-o", "--output", dest="output", help="Desired file name for the H5py output file ending with \
-     .py", default="")
+    # Defined data directories for if you do not run from the command line;
+    # all the option-parsers should be switch of then
+    data_directory = "/mnt/scratch/kersj001/data/output/2/10_ben/"
+    file_name = "combined_ben.h5"
 
-    # Get the command line options
-    (options, args) = parser.parse_args()
-    data_directory = options.path
-    file_name = options.output
+    # # Loop through the different data set
+    # for i in [1, 2, 5, 10, 15]:
+    #     # For the benign files
+    #     data_directory = "/mnt/scratch/kersj001/data/output/{}/ClinVar_ben/".format(i)
+    #     file_name = "check_14_ben.h5"
+    #     inputCNN(data_directory).combine(data_directory, file_name)
+    #     # For the deleterious files
+    #     data_directory = "/mnt/scratch/kersj001/data/output/{}/ClinVar_del/".format(i)
+    #     file_name = "check_14_del.h5".format(i)
+    #     inputCNN(data_directory).combine(data_directory, file_name)
+
+    # # Specify the options for running from the command line
+    # parser = OptionParser()
+    # # Specify the data directory
+    # parser.add_option("-p", "--path", dest="path", help="Path to the output of the 'find_sequence.py' script that \
+    #  finds for genomic locations the associated sequences and annotations within a defined window size upstream and \
+    #  downstream of the query location.", default="")
+    # # Specify the output file name
+    # parser.add_option("-o", "--output", dest="output", help="Desired file name for the H5py output file ending with \
+    #  .py", default="")
+    #
+    # # Get the command line options
+    # (options, args) = parser.parse_args()
+    # data_directory = options.path
+    # file_name = options.output
 
     # Run the main function
     inputCNN(data_directory).combine(data_directory, file_name)
