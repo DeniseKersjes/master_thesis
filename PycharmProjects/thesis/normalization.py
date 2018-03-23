@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 """
 Author: Denise Kersjes (student number 950218-429-030)
-Date: 13 March 2018
+Date of creation: 9 March 2018
+Date of last edit: 20 March 2018
 Script for normalization of the data
 
 Output are H5py files with the compressed numpy array containing normalized feature scores
@@ -12,6 +13,7 @@ import h5py
 import glob
 import pandas as pd
 import numpy as np
+from optparse import OptionParser
 
 
 def data_reading(data_directory):
@@ -20,7 +22,7 @@ def data_reading(data_directory):
     data_directory: string, defined path where the data file ending with .h5 can be found
     """
 
-    file_directory = data_directory + '*.h5'
+    file_directory = data_directory + 'combined*.h5'
 
     # Check if there is only one file with the correct name in the data directory
     n_file = 0
@@ -56,6 +58,10 @@ def feature_labels(n_nt_downstream):
                      'phastcon_mam', 'phastcon_pri', 'phastcon_ver',
                      'phylop_mam', 'phylop_pri', 'phylop_ver',
                      'GerpN', 'GerpS', 'GerpRS', 'Gerp_pval']
+
+    # # Feature names in order of influence
+    # feature_names = ['phastcon_pri', 'phylop_ver', 'phylop_pri', 'phastcon_mam', 'GerpS', 'phastcon_ver', 'GerpN',
+    #                  'phylop_mam', 'ntC', 'ntG', 'ntT', 'ntA', 'GerpRS', 'Gerp_pval']
 
     # Get the feature names when neighbouring positions are not included
     if n_nt_downstream == 0:
@@ -192,8 +198,37 @@ if __name__ == "__main__":
     start_time = time.time()
 
     # Get the data directory
-    data_directory_ben = "/mnt/scratch/kersj001/data/output/10/1_mil_ben/"
-    data_directory_del = "/mnt/scratch/kersj001/data/output/10/1_mil_del/"
+    data_directory_ben = "/mnt/scratch/kersj001/data/output/2/10_ben/"
+    data_directory_del = "/mnt/scratch/kersj001/data/output/2/10_del/"
+    #
+    # for i in [1, 2, 5, 10, 15]:
+    #     # data_directory_ben = "/mnt/scratch/kersj001/data/output/{}/1_mil_ben/".format(i)
+    #     # data_directory_del = "/mnt/scratch/kersj001/data/output/{}/1_mil_del/".format(i)
+    #     data_directory_ben = "/mnt/scratch/kersj001/data/output/{}/ClinVar_ben/".format(i)
+    #     data_directory_del = "/mnt/scratch/kersj001/data/output/{}/ClinVar_del/".format(i)
+    #
+    #     data_ben = data_reading(data_directory_ben)
+    #     data_del = data_reading(data_directory_del)
+    #     data_df, data_shape = create_dataframe(data_ben, data_del)
+    #     df_without_nan = handle_nan(data_df)
+    #     normalized = normalize_data(df_without_nan, data_shape)
+    #     output_directory = "/mnt/scratch/kersj001/data/output/normalized_data/log_check/check_14/"
+    #     write_output(normalized, output_directory, data_directory_ben)
+
+    # # Specify the options for running from the command line
+    # parser = OptionParser()
+    # # Specify the data directory for the benign and deleterious SNPs
+    # parser.add_option("-b", "--ben", dest="benign", help="Path to the output of the 'combine_features.py' script that \
+    #  generates a H5py file with the compressed numpy array containing feature scores of benign SNPs and its \
+    #  neighbouring features", default="")
+    # parser.add_option("-d", "--del", dest="deleterious", help="Path to the output of the 'combine_features.py' script \
+    #  that generates a H5py file with the compressed numpy array containing feature scores of deleterious SNPs and \
+    #  its neighbouring features", default="")
+    #
+    # # Get the command line options for reading the data for both the benign and deleterious SNPs
+    # (options, args) = parser.parse_args()
+    # data_directory_ben = options.benign
+    # data_directory_del = options.deleterious
 
     # Read the data
     data_ben = data_reading(data_directory_ben)
