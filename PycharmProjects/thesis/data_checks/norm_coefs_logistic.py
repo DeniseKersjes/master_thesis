@@ -2,7 +2,7 @@
 """
 Author: Denise Kersjes (student number 950218-429-030)
 Date of creation: 13 March 2018
-Date of last edit: 15 March 2018
+Date of last edit: 19 March 2018
 Script for visualisation of the feature coefficient after performing Logistic Regression
 
 Output is .h5 file containing a compressed numpy array of feature coefficients from the logistic regression classifier
@@ -14,19 +14,20 @@ import h5py
 import numpy as np
 from sklearn import linear_model
 from sklearn.metrics import roc_auc_score, accuracy_score
+from sklearn.model_selection import train_test_split
 from optparse import OptionParser
 
 
 def data_reading(data_file):
-    """ Reads the .H5py file containing the data back as a nunmpy array
+    """ Reads the .H5py file containing the data back as a numpy array
 
     data_file: string, data directory ending with file name which contains the compressed numpy array
     """
 
     # The number of samples is needed to read the HDF5 file, which is stored in the name
-    # Split by '/' ro remove the directory, and by '.' to remove the file format
+    # Split by '/' to remove the directory, and by '.' to remove the file format
     file_name = data_file.split("/")[-1].split(".")[-2]
-    # The file name ends with the number of samples
+    # The file name ends with the number of samples and before that the number of included neighbours
     n_samples = int(file_name.split("_")[-1])
     n_neighbours = int(file_name.split("_")[-2])
 
@@ -81,7 +82,7 @@ def data_labels(data):
     return labels
 
 
-def logistic_regression(samples, labels, samples_val, labels_val, n_samples, n_neighbours=0, title=''):
+def logistic_regression(samples, labels, samples_val, labels_val, n_samples, n_check, n_neighbours=0, title=''):
     """ Perform logistic regression classification and stores the obtained feature coefficients as an HDF5 file
 
     samples: numpy array, contains features scores with shape (samples, number of features * number of neighbouring \
@@ -95,53 +96,85 @@ def logistic_regression(samples, labels, samples_val, labels_val, n_samples, n_n
     title: string, indicates if neighbouring positions are include or excluded in the data while running the classifier
     """
 
+    # Split the data in a training (90%) and test set (10%)
+    x_train, x_test, y_train, y_test = train_test_split(samples, labels, test_size=0.1)
+
+    # Keep track of the running time of the logistic regression classification
+    start_time_clf = time.time()
+
     # Specify the classifier
     clf = linear_model.LogisticRegression()
 
     # Fit the logistic regression model
-    clf.fit(X=samples, y=labels)
+    clf.fit(X=x_train, y=y_train)
 
     # Get the coefficients for each feature
     coef = clf.coef_.ravel()
 
-    # Get the training accuracy in percentages
-    predictions_train = clf.predict(X=samples)
-    accuracy_train = (accuracy_score(y_true=labels, y_pred=predictions_train))*100
-    scores_train = clf.decision_function(X=samples)
-    ROC_AUC_train = (roc_auc_score(y_true=labels, y_score=scores_train))*100
+    # Get the training, test, and validation accuracy in percentages
+    accuracy_train, ROC_AUC_train = get_accuracy(clf, x_train, y_train)
+    accuracy_test, ROC_AUC_test = get_accuracy(clf, x_test, y_test)
+    accuracy_val, ROC_AUC_val = get_accuracy(clf, samples_val, labels_val)
 
-    # Check the validation accuracy in percentages
-    predictions_val = clf.predict(X=samples_val)
-    accuracy_val = (accuracy_score(y_true=labels_val, y_pred=predictions_val))*100
-    scores_val = clf.decision_function(X=samples_val)
-    ROC_AUC_val = (roc_auc_score(y_true=labels_val, y_score=scores_val))*100
+    # Get the total running time of the logistic regression classification
+    log_run_time = time.time() - start_time_clf
 
     # Store the statistical outcomes
-    store_statistics(accuracy_train, ROC_AUC_train, accuracy_val, ROC_AUC_val, n_samples, n_neighbours, title)
+    store_statistics(accuracy_train, ROC_AUC_train, accuracy_test, ROC_AUC_test, accuracy_val, ROC_AUC_val, n_samples,
+                     n_neighbours, title, n_check, log_run_time)
 
     return coef
 
 
-def store_statistics(accuracy_train, ROC_AUC_train, accuracy_val, ROC_AUC_val, n_samples, n_neighbours, title):
+def get_accuracy(clf, samples, labels):
+    """ Get the accuracy and ROC AUC score of the logistic regression classifier
+
+    clf: sklearn class, defines the logistic classification model
+    samples: numpy array, contains features scores with shape (samples, number of features * number of neighbouring \
+     positions)
+    labels: numpy array, contains data labels corresponding to the samples
+    """
+
+    # Predict the labels
+    predictions = clf.predict(X=samples)
+
+    # Get the accuracy by comparing the true labels with the predicted labels
+    accuracy = (accuracy_score(y_true=labels, y_pred=predictions)) * 100
+
+    # Get the distance of the samples to the separating hyperplane
+    scores = clf.decision_function(X=samples)
+
+    # Get the ROC AUC score by comparing the true labels with the distance scores
+    ROC_AUC = (roc_auc_score(y_true=labels, y_score=scores)) * 100
+
+    return accuracy, ROC_AUC
+
+
+def store_statistics(accuracy_train, ROC_AUC_train, accuracy_test, ROC_AUC_test, accuracy_val, ROC_AUC_val, n_samples,
+                     n_neighbours, title, order_check, run_time):
     """ Write the statistical results to the desired .txt file
 
     accuracy_train: float, training accuracy after fitting the logistic regression classifier
     ROC_AUC_train: float, ROC AUC score of the training after fitting the logistic regression classifier
+    accuracy_test: float, test accuracy after fitting the logistic regression classifier
+    ROC_AUC_test: float, ROC AUC score of the test after fitting the logistic regression classifier
     accuracy_val: float, validation accuracy after fitting the logistic regression classifier
     ROC_AUC_val: float, ROC AUC score of the validation samples after fitting the logistic regression classifier
     n_samples: integer, correspond to the number of samples in the data set
     n_neighbours: integer, indicates how many neighbouring positions are included
     title: string, indicates if neighbouring positions are include or excluded in the data while running the classifier
+    run_time: float, refers to the running time of the logistic regression classifier in seconds
     """
 
     # Get the file name where the statistical results will be written to
     working_dir = os.path.dirname(os.path.abspath(__file__))
-    file_name = working_dir + "/output/norm_accuracy.txt"
+    file_name = working_dir + "/output/norm_accuracy_checks.txt"
 
     # Extend the file with the results in the corresponding data types
     with open(file_name, 'a') as output:
-        output.write("\n{:d}\t{:s}\t{:d}\t{:.2f}\t{:.2f}\t{:.2f}\t{:.2f}".format(n_samples, title, n_neighbours,
-                     accuracy_train, accuracy_val, ROC_AUC_train, ROC_AUC_val))
+        output.write("\n{:d}\t{:s}\t{:d}\t{:d}\t{:.2f}\t{:.2f}\t{:.2f}\t{:.2f}\t{:.2f}\t{:.2f}\t{:.0f}".format(
+                     n_samples, title, order_check, n_neighbours, accuracy_train, accuracy_test, accuracy_val,
+                     ROC_AUC_train, ROC_AUC_test, ROC_AUC_val, run_time))
 
     output.close()
 
@@ -156,8 +189,8 @@ def write_output(coefs, data_size, n_neighbours=0):
 
     # Get the directory for storing the file
     working_dir = os.path.dirname(os.path.abspath(__file__))
-    file_name = working_dir + "/output/CV_classifiers/clf_HDF5_files/normalized_logistic/{}_norm_weights_{}".format(
-        n_neighbours, data_size)
+    file_name = working_dir + "/output/CV_classifiers/clf_HDF5_files/normalized_logistic/" \
+                              "{}_norm_weights_{}".format(n_neighbours, data_size)
 
     # Get an unique file name
     file_name = saving(file_name)
@@ -199,15 +232,17 @@ def get_arguments():
     parser.add_option("-d", "--data", dest="data", help="Path to the output of the normalized feature scores of \
         deleterious SNPs and its neighbouring features", default="")
     # Specify the data directory for the validation samples
-    parser.add_option("-v", "--valdata", dest="validation_data", help="Path to the normalized validation samples", \
+    parser.add_option("-v", "--valdata", dest="validation_data", help="Path to the normalized validation samples",
         default="")
+    parser.add_option("-i", "--iter", dest="iterations", help="no", default="")
 
     # Get the command line options for reading the data for both the benign and deleterious SNPs
     (options, args) = parser.parse_args()
     data_directory = options.data
     val_data_directory = options.validation_data
+    n_check = int(options.iterations)
 
-    return data_directory, val_data_directory
+    return data_directory, val_data_directory, n_check
 
 
 if __name__ == "__main__":
@@ -216,15 +251,11 @@ if __name__ == "__main__":
     start_time_script = time.time()
 
     # Get the given arguments
-    data_directory, val_data_directory = get_arguments()
+    data_directory, val_data_directory, n_check = get_arguments()
 
     # Read the HDF5 file back to a numpy array
     data, data_size, n_neighbours = data_reading(data_directory)
     val_data, _, _ = data_reading(val_data_directory)
-
-    # Convert the NaN data values into zero's
-    data = np.nan_to_num(data)
-    val_data = np.nan_to_num(val_data)
 
     # Parse the data into samples that considers neighbouring positions and into samples with only the SNP of interest
     snp_data, neighbour_data = data_parser(data)
@@ -237,14 +268,15 @@ if __name__ == "__main__":
     # Run the  logistic regression classifier for samples containing only the data of the SNP of interest and also for
     # the samples including neighbouring positional data
     print("NEIGHBOURS EXCLUDED")
-    weights_snp = logistic_regression(snp_data, labels_data, val_snp_data, labels_val, data_size, title='excluding')
+    weights_snp = logistic_regression(snp_data, labels_data, val_snp_data, labels_val, data_size, n_check,
+                                      title='excluding')
     print("NEIGHBOURS INCLUDED")
     weights_neighbour = logistic_regression(neighbour_data, labels_data, val_neighbour_data, labels_val, data_size,
-                                            n_neighbours=n_neighbours, title='including')
+                                            n_check, n_neighbours=n_neighbours, title='including')
 
     # Write the output to a HDF5 file
-    write_output(weights_snp, data_size)
-    write_output(weights_neighbour, data_size, n_neighbours=n_neighbours)
+    # write_output(weights_snp, data_size)
+    # write_output(weights_neighbour, data_size, n_neighbours=n_neighbours)
 
     # Get the complete running time of the script
     print("----- {} seconds -----".format(round(time.time() - start_time_script), 2))
