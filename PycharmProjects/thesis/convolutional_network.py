@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 """
 Author: Denise Kersjes (student number 950218-429-030)
-Date of creation: 05 January 2018
-Date of last edit: 05 April 2018
+Date of creation: 05 April 2018
+Date of last edit: 11 April 2018
 Script for performing neural network containing a convolutional layer on the SNP data set
 
 Output is a .txt file with statistic results of the neural network and a loss function plot
@@ -25,7 +25,7 @@ class NeuralNetwork(object):
     """
 
     def __init__(self, all_samples, all_labels, fc_layers, do_layers, dropout_rate, act_func, learning_rate,
-                 batch_size, feature_number, position_number):
+                 batch_size, feature_number, position_number, pooling_type):
         """ Initialize neural network object
 
         all_samples: numpy array, contains features scores with shape (number of samples, number of features) of the
@@ -40,10 +40,12 @@ class NeuralNetwork(object):
         batch_size: integer, defines the batch size for training
         feature_number: integer, defines the number of features that is used for every nucleotide position
         position_number: integer, defines the considered nucleotide positions
+        pooling_type: string, defines which type of pooling will be used after the convolutional layer
         """
 
         # Launch the TensorFlow session
         self.session = tf.Session()
+        # self.session = tf.Session(config=tf.ConfigProto(intra_op_parallelism_threads=4))
 
         # Get the number of considered nucleotide positions
         self.nt_positions = position_number
@@ -59,14 +61,14 @@ class NeuralNetwork(object):
 
         # Define the neural network architecture
         self.create_graph(all_samples, all_labels, fc_layers, do_layers, dropout_rate, act_func, learning_rate,
-                          batch_size)
+                          batch_size, pooling_type)
 
         # Define the
         self.session.run(tf.global_variables_initializer())
         self.session.run(self.iter_initializer)
 
     def create_graph(self, all_samples, all_labels, nodes_per_layer, dropout_layers, dropout_rate, act_func,
-                     learning_rate, batch_size):
+                     learning_rate, batch_size, pooling_type):
         """ Defines the neural network architecture with name scoping for visualization in TensorBoard
 
         all_samples: numpy array, contains features scores with shape (number of samples, number of features) of the
@@ -80,6 +82,7 @@ class NeuralNetwork(object):
         act_func: Tensor, defines which activation function will be used for training the neural network
         learning_rate: float, defines the learning rate for training the network
         batch_size: integer, defines the batch size for training
+        pooling_type: string, defines which type of pooling will be used after the convolutional layer
         """
 
         with tf.variable_scope("Dataset"):
@@ -102,9 +105,20 @@ class NeuralNetwork(object):
             layers = [reshaped_batch_samples]  # The batch samples will be used as input for the first hidden layer
 
             # Create the convolutional layer
-            conv_layer = tf.layers.conv2d(inputs=layers[-1], filters=1, kernel_size=[1, self.nt_features],
-                                          padding="same", activation=act_func, name="conv-layer")
-            layers.append(conv_layer)
+            self.conv_layer = tf.layers.conv2d(inputs=layers[-1], filters=1, kernel_size=[1, self.nt_features],
+                                               padding="same", activation=act_func, name="conv-layer")
+            layers.append(self.conv_layer)
+
+            # Create a pooling layer if it is defined
+            if pooling_type == 'average pooling':
+                self.pooling_layer = tf.reduce_mean(input_tensor=layers[-1], axis=1)
+                layers.append(self.pooling_layer)
+            elif pooling_type == 'max pooling':
+                self.pooling_layer = tf.reduce_max(input_tensor=layers[-1], axis=1)
+                layers.append(self.pooling_layer)
+            elif pooling_type == 'no pooling':
+                pass
+
             # Flatten the convolutional data in a 1D vector for the fully connected layer
             flatten_conv_layer = tf.contrib.layers.flatten(layers[-1])
             layers.append(flatten_conv_layer)
@@ -140,7 +154,7 @@ class NeuralNetwork(object):
             # Define an optimize function to decrease the loss function
             self.optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(self.cost)
 
-        # Create a graph to visualize the architecture in TensorBoard
+        # # Create a graph to visualize the architecture in TensorBoard
         # working_dir = os.path.dirname(os.path.abspath(__file__))
         # writer = tf.summary.FileWriter(working_dir + "/graphs/tensorboard", graph=self.session.graph)
         # writer.close()
@@ -230,6 +244,11 @@ class NeuralNetwork(object):
                 test_accuracy = self.evaluate(evaluation_samples=test_samples, evaluation_labels=test_labels)
                 print("\t\t   Test accuracy: {:.2f}%".format(test_accuracy[1]))
 
+        trained_conv = self.session.run(self.conv_layer)
+        print(trained_conv.shape)
+        trained_pool = self.session.run(self.pooling_layer)
+        print(trained_pool.shape)
+
         # Get the total running time of the neural network
         network_run_time = time.time() - start_time_network
 
@@ -292,7 +311,7 @@ class NeuralNetwork(object):
 
         # Get the file name where the statistical results will be written to
         working_dir = os.path.dirname(os.path.abspath(__file__))
-        file_name = working_dir + "/output_ANN/results_ANN.txt"
+        file_name = working_dir + "/output_ANN/conv_results_ANN.txt"
 
         # Extend the file with the results in the corresponding data types
         with open(file_name, 'a') as output:
@@ -302,6 +321,7 @@ class NeuralNetwork(object):
                     all_features, n_samples, n_neighbours, layers, act_func, dropout_rate, learning_rate,
                     iterations, optimum_idx, optimum_loss, start_test_cost, end_test_cost, accuracy_train,
                     accuracy_test, accuracy_val, ROC_AUC_train, ROC_AUC_test, ROC_AUC_val, run_time))
+        output.close()
 
     def loss_graph(self, training_costs, test_costs, learning_rate, training_accuracy, test_accuracy, val_accuracy,
                    layers, data_size, n_neighbours, dropout_layer, dropout_rate):
@@ -442,7 +462,7 @@ def data_labels(data):
     return labels
 
 
-def define_parameters(all_features, act_func, dropout, fc_layer_units, training_samples, batch_perc):
+def define_parameters(all_features, act_func, dropout, fc_layer_units, training_samples, batch_perc, pooling):
     """ Convert some parameters in the right format
 
     act_funct: string, defines which activation function will  be used for training the neural network
@@ -451,6 +471,7 @@ def define_parameters(all_features, act_func, dropout, fc_layer_units, training_
     training_samples: numpy array, contains features scores with shape (samples, number of features * number of
      neighbouring positions) of the training samples
     batch_perc: flaot, defines the percentage of the training samples that will be used as batch size
+    pooling: string, refers to the type of pooling layer
     """
 
     # Get the variables in the right format
@@ -480,7 +501,7 @@ def define_parameters(all_features, act_func, dropout, fc_layer_units, training_
             dropout_booleans.append(True)
 
     # Get the layer names of the neural network architecture
-    layers = []
+    layers = ['conv']
     for index, nodes in enumerate(int_layer_units):
         layers.append('fc ({})'.format(nodes))
         if dropout_booleans[index]:
@@ -495,14 +516,25 @@ def define_parameters(all_features, act_func, dropout, fc_layer_units, training_
     elif act_func == 'relu' or act_func == 'r':
         act_func = tf.nn.relu
         act_title = 'ReLU'
+    elif act_func == 'leakyrelu' or act_func == 'leaky' or act_func == 'l':
+        act_func = tf.nn.leaky_relu
+        act_title = 'Leaky ReLU'
     elif act_func == 'tanh' or act_func == 'tan' or act_func == 't':
         act_func = tf.tanh
         act_title = 'tanH'
     else:
         act_func = None
-        act_title = 'none'
+        act_title = 'linear'
 
-    return all_features, act_func, act_title, batch_size, layers, dropout_booleans, int_layer_units
+    pooling = pooling.lower()
+    if pooling == 'average' or pooling == 'avg' or pooling == 'a' or pooling == 'mean':
+        pooling_name = 'average pooling'
+    elif pooling == 'max' or pooling == 'm':
+        pooling_name = 'max pooling'
+    else:
+        pooling_name = 'no pooling'
+
+    return all_features, act_func, act_title, batch_size, layers, dropout_booleans, int_layer_units, pooling_name
 
 
 def get_arguments():
@@ -517,11 +549,12 @@ def get_arguments():
     # snp_neighbour = 'snp'
     learning_rate = 0.01
     dropout_rate = 0.5
-    activation_function = 'r'  # tf.nn.relu
+    activation_function = 't'
     batch_percentage = 0.01
-    iterations = 500
-    fc_nodes = '5'
-    dropout_layer = 'f'
+    iterations = 10000
+    fc_nodes = '10'
+    dropout_layer = 't'
+    pooling_layer = 'a'
 
     # # Specify the options for running from the command line
     # parser = OptionParser()
@@ -551,13 +584,15 @@ def get_arguments():
     #     training the neural network", default=1000)
     # # Specify the percentage of training data that will be use as batch size
     # parser.add_option("-b", "--batch", dest="batch_perc", help="Float that defines the percentage of training samples \
-    #         that will be used as batch size", default=0.01)
+    #     that will be used as batch size", default=0.01)
     # # Specify the nodes for the fully connected layers
     # parser.add_option("-n", "--nodes", dest="fc_nodes", help="List that contains integer values that defines the \
     #     number of nodes for the fully connected layer", default="4")
     # # Specify if dropout layers occurs after a fully connected layer
     # parser.add_option("-o", "--dropout", dest="dropout_layers", help="List that contains boolean values that defines \
     #     if a fully connected layer is followed by a dropout layer", default="False")
+    # parser.add_option("-p", "--pooling", dest="pooling_layer", help="String that refers if and what type of pooling \
+    #     layer is used", default="none")
     #
     # # Get the command line options for reading the data for both the benign and deleterious SNPs
     # (options, args) = parser.parse_args()
@@ -572,9 +607,10 @@ def get_arguments():
     # iterations = int(options.iterations)
     # fc_nodes = options.fc_nodes
     # dropout_layer = options.dropout_layers
+    # pooling_layer = options.pooling_layer
 
     return data_directory, val_data_directory, all, snp_neighbour, learning_rate, dropout_rate, activation_function, \
-           batch_percentage, iterations, fc_nodes, dropout_layer
+           batch_percentage, iterations, fc_nodes, dropout_layer, pooling_layer
 
 
 if __name__ == "__main__":
@@ -583,7 +619,8 @@ if __name__ == "__main__":
 
     # Get the given arguments including the hyperparameters for the neural network
     data_directory, val_data_directory, all_features, snp_neighbour, learning_rate, dropout_rate, \
-        activation_function_name, batch_percentage, iterations, fc_nodes, dropout_layers = get_arguments()
+        activation_function_name, batch_percentage, iterations, fc_nodes, dropout_layers, pooling_layer_type = \
+        get_arguments()
 
     # Read the HDF5 file back to a numpy array
     data, data_size, n_neighbours = data_reading(data_file=data_directory)
@@ -609,15 +646,16 @@ if __name__ == "__main__":
     training_data, test_data, training_labels, test_labels = train_test_split(samples, labels, test_size=test_size)
 
     # Get the parameters for the neural network in correct format
-    feature_title, act_func, act_title, batch_size, layer_names, dropout_booleans, fc_layer_units = define_parameters(
-        all_features=all_features, act_func=activation_function_name, dropout=dropout_layers, fc_layer_units=fc_nodes,
-        training_samples=training_data, batch_perc=batch_percentage)
+    feature_title, act_func, act_title, batch_size, layer_names, dropout_booleans, fc_layer_units, pooling_layer_name \
+        = define_parameters(all_features=all_features, act_func=activation_function_name, dropout=dropout_layers,
+                            fc_layer_units=fc_nodes, training_samples=training_data, batch_perc=batch_percentage,
+                            pooling=pooling_layer_type)
 
     # Create the neural network
     nn = NeuralNetwork(all_samples=training_data, all_labels=training_labels, fc_layers=fc_layer_units,
                        do_layers=dropout_booleans, dropout_rate=dropout_rate, act_func=act_func,
                        learning_rate=learning_rate, batch_size=batch_size, feature_number=n_features,
-                       position_number=n_positions)
+                       position_number=n_positions, pooling_type=pooling_layer_name)
 
     # Train the neural network
     run_time, training_loss, test_loss = nn.train(n_iterations=iterations, test_samples=test_data,
