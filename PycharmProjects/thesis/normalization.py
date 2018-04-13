@@ -2,7 +2,7 @@
 """
 Author: Denise Kersjes (student number 950218-429-030)
 Date of creation: 9 March 2018
-Date of last edit: 20 March 2018
+Date of last edit: 13 April 2018
 Script for normalization of the data
 
 Output are H5py files with the compressed numpy array containing normalized feature scores
@@ -159,8 +159,13 @@ def normalize_data(dataframe, data_shape):
     for feature_name in list(dataframe):
         # The nucleotide features should not be normalized
         if "nt" not in feature_name:
-            normalized_df[feature_name] = (dataframe[feature_name] - dataframe[feature_name].mean()) / \
-                                          dataframe[feature_name].std()
+            x = dataframe[feature_name]
+            mean = dataframe[feature_name].mean()
+            std = dataframe[feature_name].std()
+            # Prevent dividing by 0
+            if std == 0:
+                std = 1 / 10000000000000000000000000000000000000000000000000000000000000000000000
+            normalized_df[feature_name] = (x - mean) / std
 
     # Convert the dataframe back to its original numpy array shape
     numpy_values = normalized_df.values
