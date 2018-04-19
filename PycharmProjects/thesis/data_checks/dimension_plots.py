@@ -2,7 +2,7 @@
 """
 Author: Denise Kersjes (student number 950218-429-030)
 Date of creation: 12 April 2018
-Date of last edit: 17 April 2018
+Date of last edit: 18 April 2018
 Script for plotting the data in a dimensional space
 
 Output are .png files containing a PCA and MDS plot
@@ -11,7 +11,6 @@ Output are .png files containing a PCA and MDS plot
 import time
 import h5py
 import os
-import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.decomposition import PCA
 from sklearn.manifold import MDS
@@ -155,7 +154,7 @@ def dim_class_plot(dim_data, dim_val_data, n_samples, n_neighbours, dim_type='MD
     plt.subplots_adjust(bottom=0.2)
     # Save the plot
     working_dir = os.path.dirname(os.path.abspath(__file__))
-    saving(working_dir + "/output/dimension_plots/{}/class_{}_error_{}".format(dim_type, n_neighbours, n_samples))
+    saving(working_dir + "/output/dimension_plots/{}/class_{}_{}".format(dim_type, n_neighbours, n_samples))
 
 
 def dim_feature_plot(x_pc, y_pc, x_pc_val, y_pc_val, n_samples, n_neighbours, dim_type):
@@ -193,7 +192,7 @@ def dim_feature_plot(x_pc, y_pc, x_pc_val, y_pc_val, n_samples, n_neighbours, di
     plt.subplots_adjust(right=0.65)
     # Save the plot
     working_dir = os.path.dirname(os.path.abspath(__file__))
-    saving(working_dir + "/output/dimension_plots/{}/feature_{}_error_{}".format(dim_type, n_neighbours, n_samples))
+    saving(working_dir + "/output/dimension_plots/{}/feature_{}_{}".format(dim_type, n_neighbours, n_samples))
 
 
 def feature_colors():
@@ -260,9 +259,8 @@ if __name__ == "__main__":
     # # Define if you only  want to consider SNP positions or also neighbouring positions
     # incl_neighbour = "y"
     # # Get the data directory
-    # data_directory = "/mnt/scratch/kersj001/data/output/normalized_data/5_200.h5"
-    # # val_data_directory = "/mnt/scratch/kersj001/data/output/normalized_data/1_26172.h5"
-    # val_data_directory = "/mnt/scratch/kersj001/data/output/normalized_data/5_20.h5"
+    # data_directory = "/mnt/scratch/kersj001/data/output/normalized_data/2_20000.h5"
+    # val_data_directory = "/mnt/scratch/kersj001/data/output/normalized_data/2_26172.h5"
 
     # Specify the options for running from the command line
     parser = OptionParser()
