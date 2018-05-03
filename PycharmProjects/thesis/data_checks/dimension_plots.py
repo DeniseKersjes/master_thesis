@@ -2,7 +2,7 @@
 """
 Author: Denise Kersjes (student number 950218-429-030)
 Date of creation: 12 April 2018
-Date of last edit: 18 April 2018
+Date of last edit: 03 May 2018
 Script for plotting the data in a dimensional space
 
 Output are .png files containing a PCA and MDS plot
@@ -44,7 +44,7 @@ def data_reading(data_file):
 
 
 def data_parser(data, snp_neighbour):
-    """ Function that parsed the data in order to perform logistic regression with and without neighbouring positions
+    """ Function that parsed the data in order to obtain a dimension plot with and without neighbouring positions
 
     data: numpy array of shape (number of samples, number of features, number of nucleotides), the data contain both
      the benign and deleterious samples
@@ -85,9 +85,18 @@ def do_pca(data):
 
     # Transform the data for classifying per class label
     transformed_data = pca.fit_transform(data)
+    # print(transformed_data.shape)
+    # print(np.amax(transformed_data))
+    # print(np.argmax(transformed_data)/2)
 
     # Check how much variance is explained by the first two components
-    print(pca.explained_variance_ratio_)
+    variance = pca.explained_variance_ratio_
+    print(variance)
+
+    # Get the file name where the statistical results will be written to
+    file_name = "/mnt/nexenta/kersj001/results/dimension_plots/explained_variance.txt"
+    with open(file_name, 'a') as output:
+        output.write("\n{}\t{}".format(data.shape, variance))
 
     return pc1, pc2, transformed_data
 
@@ -153,8 +162,7 @@ def dim_class_plot(dim_data, dim_val_data, n_samples, n_neighbours, dim_type='MD
     plt.legend(loc='upper center', bbox_to_anchor=(0.5, -0.12), fancybox=True, ncol=4, frameon=False)
     plt.subplots_adjust(bottom=0.2)
     # Save the plot
-    working_dir = os.path.dirname(os.path.abspath(__file__))
-    saving(working_dir + "/output/dimension_plots/{}/class_{}_{}".format(dim_type, n_neighbours, n_samples))
+    saving("/mnt/nexenta/kersj001/results/dimension_plots/{}_class_{}_{}".format(dim_type, n_neighbours, n_samples))
 
 
 def dim_feature_plot(x_pc, y_pc, x_pc_val, y_pc_val, n_samples, n_neighbours, dim_type):
@@ -191,8 +199,7 @@ def dim_feature_plot(x_pc, y_pc, x_pc_val, y_pc_val, n_samples, n_neighbours, di
     plt.legend(loc='right', bbox_to_anchor=(1.5, 0.5), fancybox=True, frameon=False)
     plt.subplots_adjust(right=0.65)
     # Save the plot
-    working_dir = os.path.dirname(os.path.abspath(__file__))
-    saving(working_dir + "/output/dimension_plots/{}/feature_{}_{}".format(dim_type, n_neighbours, n_samples))
+    saving("/mnt/nexenta/kersj001/results/dimension_plots/{}_feature_{}_{}".format(dim_type, n_neighbours, n_samples))
 
 
 def feature_colors():
@@ -255,30 +262,30 @@ if __name__ == "__main__":
     # Keep track of the running time
     start_time = time.time()
 
-    # # Get the desired parameters
-    # # Define if you only  want to consider SNP positions or also neighbouring positions
-    # incl_neighbour = "y"
-    # # Get the data directory
-    # data_directory = "/mnt/scratch/kersj001/data/output/normalized_data/2_20000.h5"
-    # val_data_directory = "/mnt/scratch/kersj001/data/output/normalized_data/2_26172.h5"
+    # Get the desired parameters
+    # Define if you only  want to consider SNP positions or also neighbouring positions
+    incl_neighbour = "n"
+    # Get the data directory
+    data_directory = "/mnt/nexenta/kersj001/data/normalized/200_thousand/1_200000.h5"
+    val_data_directory = "/mnt/nexenta/kersj001/data/normalized/200_thousand/1_26172.h5"
 
-    # Specify the options for running from the command line
-    parser = OptionParser()
-    # Specify the data directory for the benign and deleterious SNPs
-    parser.add_option("-d", "--data", dest="data", help="Path to the output of the normalized feature scores of \
-        deleterious SNPs and its neighbouring features", default="")
-    # Specify the data directory for the validation samples
-    parser.add_option("-v", "--valdata", dest="validation_data", help="Path to the normalized validation samples",
-        default="")
-    # Specify if the neural network will included neighbouring positions
-    parser.add_option("-n", "--neighbours", dest="neighbours", help="String that indicates if the surrounding neighbours \
-        will be included ('n') or excluded ('s')", default="n")
-
-    # Get the command line options for reading the data for both the benign and deleterious SNPs
-    (options, args) = parser.parse_args()
-    data_directory = options.data
-    val_data_directory = options.validation_data
-    incl_neighbour = options.neighbours
+    # # Specify the options for running from the command line
+    # parser = OptionParser()
+    # # Specify the data directory for the benign and deleterious SNPs
+    # parser.add_option("-d", "--data", dest="data", help="Path to the output of the normalized feature scores of \
+    #     deleterious SNPs and its neighbouring features", default="")
+    # # Specify the data directory for the validation samples
+    # parser.add_option("-v", "--valdata", dest="validation_data", help="Path to the normalized validation samples",
+    #     default="")
+    # # Specify if the neural network will included neighbouring positions
+    # parser.add_option("-n", "--neighbours", dest="neighbours", help="String that indicates if the surrounding neighbours \
+    #     will be included ('n') or excluded ('s')", default="n")
+    #
+    # # Get the command line options for reading the data for both the benign and deleterious SNPs
+    # (options, args) = parser.parse_args()
+    # data_directory = options.data
+    # val_data_directory = options.validation_data
+    # incl_neighbour = options.neighbours
 
     # Read the HDF5 file back to a numpy array
     data, data_size, n_neighbours = data_reading(data_file=data_directory)
@@ -300,20 +307,17 @@ if __name__ == "__main__":
     pca_first_pc_val, pca_second_pc_val, pca_pcs_label_val = do_pca(data=val_samples)
 
     # Apply MDS on the data
-    mds_first_pc, mds_second_pc, mds_pcs_label = do_mds(data=samples)
-    mds_first_pc_val, mds_second_pc_val, mds_pcs_label_val = do_mds(data=val_samples)
+    # mds_first_pc, mds_second_pc, mds_pcs_label = do_mds(data=samples)
+    # mds_first_pc_val, mds_second_pc_val, mds_pcs_label_val = do_mds(data=val_samples)
 
     # Create a dimensional plot classified per feature
     dim_feature_plot(x_pc=pca_first_pc, y_pc=pca_second_pc, x_pc_val=pca_first_pc_val, y_pc_val=pca_second_pc_val,
                      n_samples=data_size, n_neighbours=n_neighbours, dim_type='PCA')
-    dim_feature_plot(x_pc=mds_first_pc, y_pc=mds_second_pc, x_pc_val=mds_first_pc_val, y_pc_val=mds_second_pc_val,
-                     n_samples=data_size, n_neighbours=n_neighbours, dim_type='MDS')
+    # dim_feature_plot(x_pc=mds_first_pc, y_pc=mds_second_pc, x_pc_val=mds_first_pc_val, y_pc_val=mds_second_pc_val,
+    #                  n_samples=data_size, n_neighbours=n_neighbours, dim_type='MDS')
 
     # Create a dimensional plot classified per class label
     dim_class_plot(dim_data=pca_pcs_label, dim_val_data=pca_pcs_label_val, n_samples=data_size,
                    n_neighbours=n_neighbours, dim_type='PCA')
-    dim_class_plot(dim_data=mds_pcs_label, dim_val_data=mds_pcs_label_val, n_samples=data_size,
-                   n_neighbours=n_neighbours, dim_type='MDS')
-
-    # Get the complete running time of the script
-    print("----- {} seconds -----".format(round(time.time() - start_time), 2))
+    # dim_class_plot(dim_data=mds_pcs_label, dim_val_data=mds_pcs_label_val, n_samples=data_size,
+    #                n_neighbours=n_neighbours, dim_type='MDS')
