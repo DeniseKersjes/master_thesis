@@ -2,7 +2,7 @@
 """
 Author: Denise Kersjes (student number 950218-429-030)
 Date of creation: 23 April 2018
-Date of last edit: 23 April 2018
+Date of last edit: 03 May 2018
 Script for plotting the distribution of data features
 
 Output are .png files containing a distribution plot
@@ -56,18 +56,20 @@ def data_parser(data, snp_neighbour):
         index_snp = (data.shape[2] - 1) / 2  # -1 for the SNP of interest
         snp_samples = data[:, :, int(index_snp)]
         # Get the samples for phastcon scores (mammalian: position 4, primate: position 5, and vertebrate: position 6)
-        mammalian = snp_samples[:, 4]
-        primate = snp_samples[:, 5]
-        vertebrate = snp_samples[:, 6]
+        mammalian = snp_samples[:, 13]
+        # primate = snp_samples[:, 11]
+        # vertebrate = snp_samples[:, 12]
     # Get the features of the SNP of interest and neighbouring positions
     else:
         # Get the samples for phastcon scores (mammalian: position 4, primate: position 5, and vertebrate: position 6)
-        mammalian = data[:, 4, :].reshape([-1])
-        primate = data[:, 5, :].reshape([-1])
-        vertebrate = data[:, 6, :].reshape([-1])
+        mammalian = data[:, 13, :].reshape([-1])
+        # primate = data[:, 11, :].reshape([-1])
+        # vertebrate = data[:, 12, :].reshape([-1])
 
     # Join the different phastcon scores together and covert it to a list
-    phastcon = np.stack((mammalian, primate, vertebrate)).tolist()
+    # phastcon = np.stack(mammalian).tolist()
+    phastcon = mammalian.tolist()
+    # phastcon = np.stack((mammalian, primate, vertebrate)).tolist()
 
     return phastcon
 
@@ -75,21 +77,23 @@ def data_parser(data, snp_neighbour):
 def distribution_plot(data, val_data, n_neighbours, n_samples):
     """
 
-    data: numpy array of shape (number of features, number of samples * number of nucleotides), the data contain both
-     the benign and deleterious samples
-    val_data: numpy array of shape (number of features, number of samples * number of nucleotides), the data contain
-     both the benign and deleterious validation samples
+    data: list of list, contains scores of [[PhastCon mammalian], [PhastCon primate], [PhastCon vertebrate]]
+    val_data: list of list, contains validation scores of [[PhastCon mammalian], [PhastCon primate],
+     [PhastCon vertebrate]]
     n_neighbours: integer, indicates how many neighbouring positions are considered
     n_samples: integer, correspond to the number of samples in the data set
     """
 
-    # Get the directory for saving the plot
-    working_dir = os.path.dirname(os.path.abspath(__file__))
-    save_name = working_dir + "/output/distribution_plots/PhastCon/{}_distribution_{}".format(n_neighbours, n_samples)
-
+    data = [data]
+    val_data = [val_data]
     # Set the samples names for the title and colors for each pahstcon type
-    sample_names = ['PhastCon mammalian', 'PhastCon primate', 'PhastCon vertebrate']
-    color = ['xkcd:blue', 'xkcd:emerald green', 'xkcd:red']
+    # sample_names = ['phastCons mammalian', 'phastCons primate', 'phastCons vertebrate']
+    # sample_names = ['phyloP mammalian', 'phyloP primate', 'phyloP vertebrate']
+    # sample_names = ['GerpN', 'GerpS', 'GerpRS', 'GerpRS p-value']
+    sample_names = ['GerpRS p-value']
+    # sample_names = ['the nucleotide A', 'the nucleotide C', 'the nucleotide T', 'the nucleotide G']
+    # color = ['xkcd:blue', 'xkcd:emerald green', 'xkcd:red', 'xkcd:yellow orange']
+    color = ['xkcd:yellow orange']
     # Create a density plot for each phastcon type
     for idx, phastcon_type in enumerate(data):
         # Create a new plot
@@ -100,11 +104,14 @@ def distribution_plot(data, val_data, n_neighbours, n_samples):
         # Plot the legend
         plt.legend()
         # Set the figure and axis titles
-        plt.title('Distribution of {} samples'.format(sample_names[idx]))
+        plt.title('Distribution of {} samples\n{} samples, {} neighbours included'.format(sample_names[idx], n_samples,
+                                                                                          n_neighbours))
         plt.xlabel('Score')
         plt.ylabel('Density')
         # Save the plot
-        saving(save_name, extension="-{}".format(idx))
+        save_name = "/mnt/nexenta/kersj001/results/distribution_plots/Gerp/{}_distribution_{}".format(n_neighbours,
+                                                                                                          n_samples)
+        saving(save_name, extension="-3") #{}".format(idx))
 
 
 def saving(file_path, extension='', file_type='png'):
@@ -128,29 +135,32 @@ if __name__ == "__main__":
 
     # Get the desired parameters
     # Define if you only  want to consider SNP positions or also neighbouring positions
-    incl_neighbour = "n"
+    incl_neighbour = "y"
     # Get the data directory
-    data_directory = "/mnt/scratch/kersj001/data/output/normalized_data/1_200000.h5"
-    val_data_directory = "/mnt/scratch/kersj001/data/output/normalized_data/1_26172.h5"
+    for i in [1, 2, 5, 10, 15]:
+        data_directory = "/mnt/nexenta/kersj001/data/normalized/200_thousand/{}_200000.h5".format(i)
+        val_data_directory = "/mnt/nexenta/kersj001/data/normalized/200_thousand/{}_26172.h5".format(i)
 
-    # Read the HDF5 file back to a numpy array
-    data, data_size, n_neighbours = data_reading(data_file=data_directory)
-    val_data, _, _ = data_reading(data_file=val_data_directory)
+        # Read the HDF5 file back to a numpy array
+        data, data_size, n_neighbours = data_reading(data_file=data_directory)
+        val_data, _, _ = data_reading(data_file=val_data_directory)
 
-    # Get the number of considered neighbouring positions
-    incl_neighbour = incl_neighbour.lower()
-    if incl_neighbour == "n" or incl_neighbour == "no":
-        n_neighbours = 0
-    else:
-        n_neighbours = n_neighbours
+        # Get the number of considered neighbouring positions
+        incl_neighbour = incl_neighbour.lower()
+        if incl_neighbour == "n" or incl_neighbour == "no":
+            n_neighbours = 0
+        else:
+            n_neighbours = n_neighbours
 
-    # Parse the data into samples which either consider neighbouring positions or not
-    phastcon_scores = data_parser(data=data, snp_neighbour=n_neighbours)
-    val_phastcon_scores = data_parser(data=val_data, snp_neighbour=n_neighbours)
+        # Parse the data into samples which either consider neighbouring positions or not
+        phastcon_scores = data_parser(data=data, snp_neighbour=n_neighbours)
+        val_phastcon_scores = data_parser(data=val_data, snp_neighbour=n_neighbours)
 
-    # Create the distribution plot
-    distribution_plot(data=phastcon_scores, val_data=val_phastcon_scores, n_neighbours=n_neighbours,
-                      n_samples=data_size)
+        # Create the distribution plot
+        distribution_plot(data=phastcon_scores, val_data=val_phastcon_scores, n_neighbours=n_neighbours,
+                          n_samples=data_size)
+
+        print("{} is done".format(i))
 
     # Get the complete running time of the script
     print("----- {} seconds -----".format(round(time.time() - start_time), 2))
