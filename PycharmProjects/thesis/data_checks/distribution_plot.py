@@ -56,20 +56,18 @@ def data_parser(data, snp_neighbour):
         index_snp = (data.shape[2] - 1) / 2  # -1 for the SNP of interest
         snp_samples = data[:, :, int(index_snp)]
         # Get the samples for phastcon scores (mammalian: position 4, primate: position 5, and vertebrate: position 6)
-        mammalian = snp_samples[:, 13]
-        # primate = snp_samples[:, 11]
-        # vertebrate = snp_samples[:, 12]
+        mammalian = snp_samples[:, 4]
+        primate = snp_samples[:, 5]
+        vertebrate = snp_samples[:, 6]
     # Get the features of the SNP of interest and neighbouring positions
     else:
         # Get the samples for phastcon scores (mammalian: position 4, primate: position 5, and vertebrate: position 6)
-        mammalian = data[:, 13, :].reshape([-1])
-        # primate = data[:, 11, :].reshape([-1])
-        # vertebrate = data[:, 12, :].reshape([-1])
+        mammalian = data[:, 4, :].reshape([-1])
+        primate = data[:, 5, :].reshape([-1])
+        vertebrate = data[:, 6, :].reshape([-1])
 
     # Join the different phastcon scores together and covert it to a list
-    # phastcon = np.stack(mammalian).tolist()
-    phastcon = mammalian.tolist()
-    # phastcon = np.stack((mammalian, primate, vertebrate)).tolist()
+    phastcon = np.stack((mammalian, primate, vertebrate)).tolist()
 
     return phastcon
 
@@ -84,16 +82,12 @@ def distribution_plot(data, val_data, n_neighbours, n_samples):
     n_samples: integer, correspond to the number of samples in the data set
     """
 
-    data = [data]
-    val_data = [val_data]
     # Set the samples names for the title and colors for each pahstcon type
-    # sample_names = ['phastCons mammalian', 'phastCons primate', 'phastCons vertebrate']
+    sample_names = ['phastCons mammalian', 'phastCons primate', 'phastCons vertebrate']
     # sample_names = ['phyloP mammalian', 'phyloP primate', 'phyloP vertebrate']
     # sample_names = ['GerpN', 'GerpS', 'GerpRS', 'GerpRS p-value']
-    sample_names = ['GerpRS p-value']
     # sample_names = ['the nucleotide A', 'the nucleotide C', 'the nucleotide T', 'the nucleotide G']
-    # color = ['xkcd:blue', 'xkcd:emerald green', 'xkcd:red', 'xkcd:yellow orange']
-    color = ['xkcd:yellow orange']
+    color = ['xkcd:blue', 'xkcd:emerald green', 'xkcd:red', 'xkcd:yellow orange']
     # Create a density plot for each phastcon type
     for idx, phastcon_type in enumerate(data):
         # Create a new plot
@@ -109,9 +103,9 @@ def distribution_plot(data, val_data, n_neighbours, n_samples):
         plt.xlabel('Score')
         plt.ylabel('Density')
         # Save the plot
-        save_name = "/mnt/nexenta/kersj001/results/distribution_plots/Gerp/{}_distribution_{}".format(n_neighbours,
+        save_name = "/mnt/nexenta/kersj001/results/distribution_plots/PhastCon/{}_distribution_{}".format(n_neighbours,
                                                                                                           n_samples)
-        saving(save_name, extension="-3") #{}".format(idx))
+        saving(save_name, extension="-{}".format(idx))
 
 
 def saving(file_path, extension='', file_type='png'):
