@@ -2,7 +2,7 @@
 """
 Author: Denise Kersjes (student number 950218-429-030)
 Date of creation: 13 March 2018
-Date of last edit: 19 March 2018
+Date of last edit: 04 May 2018
 Script for visualisation of the feature coefficient after performing Logistic Regression
 
 Output is .h5 file containing a compressed numpy array of feature coefficients from the logistic regression classifier
@@ -15,6 +15,7 @@ import numpy as np
 from sklearn import linear_model
 from sklearn.metrics import roc_auc_score, accuracy_score
 from sklearn.model_selection import train_test_split
+from sklearn.model_selection import KFold
 from optparse import OptionParser
 
 
@@ -105,25 +106,95 @@ def logistic_regression(samples, labels, samples_val, labels_val, n_samples, n_c
     # Specify the classifier
     clf = linear_model.LogisticRegression()
 
+    # Cross validated the samples on the logistic classifier
+    clf, training_accuracy, training_std, test_accuracy, test_std, training_roc, training_roc_sd, test_roc, \
+    test_roc_sd, accuracy_val, ROC_AUC_val = cross_validation(clf, samples, labels, samples_val, labels_val)
+
     # Fit the logistic regression model
-    clf.fit(X=x_train, y=y_train)
+    # clf.fit(X=x_train, y=y_train)
 
     # Get the coefficients for each feature
-    coef = clf.coef_.ravel()
+    # coef = clf.coef_.ravel()
+    coef = []
 
-    # Get the training, test, and validation accuracy in percentages
-    accuracy_train, ROC_AUC_train = get_accuracy(clf, x_train, y_train)
-    accuracy_test, ROC_AUC_test = get_accuracy(clf, x_test, y_test)
-    accuracy_val, ROC_AUC_val = get_accuracy(clf, samples_val, labels_val)
+    # # Get the training, test, and validation accuracy in percentages
+    # accuracy_train, ROC_AUC_train = get_accuracy(clf, x_train, y_train)
+    # accuracy_test, ROC_AUC_test = get_accuracy(clf, x_test, y_test)
+    # accuracy_val, ROC_AUC_val = get_accuracy(clf, samples_val, labels_val)
 
     # Get the total running time of the logistic regression classification
     log_run_time = time.time() - start_time_clf
 
-    # Store the statistical outcomes
-    store_statistics(accuracy_train, ROC_AUC_train, accuracy_test, ROC_AUC_test, accuracy_val, ROC_AUC_val, n_samples,
-                     n_neighbours, title, n_check, log_run_time)
+    # # Store the statistical outcomes
+    # store_statistics(accuracy_train, ROC_AUC_train, accuracy_test, ROC_AUC_test, accuracy_val, ROC_AUC_val, n_samples,
+    #                  n_neighbours, title, n_check, log_run_time)
+    store_statistics_cv(training_accuracy, training_roc, test_accuracy, test_roc, accuracy_val, ROC_AUC_val,
+                        n_samples, n_neighbours, title, n_check, log_run_time, training_std, training_roc_sd, test_std,
+                        test_roc_sd)
 
     return coef
+
+
+def cross_validation(clf, samples, labels, samples_val, labels_val):
+    """ Fit the classifier model with 10-Fold cross validation and gives the test accuracy back
+
+    clf: sklearn class, defines the classifier model
+    samples: numpy array, contains features scores with shape (samples, number of features * number of neighbouring \
+     positions)
+    labels: numpy array, contains data labels corresponding to the samples
+    """
+
+    # Defines the K-fold
+    k_fold = KFold(n_splits=10, shuffle=True)
+
+    # Keep track of the test accuracies
+    all_training_scores = []
+    all_test_scores = []
+    # all_val_scores = []
+    all_training_roc = []
+    all_test_roc = []
+    # all_val_roc = []
+
+    for train_index, test_index in k_fold.split(samples):
+        # Get a training and test set for the samples and corresponding labels
+        x_train, x_test = samples[train_index], samples[test_index]
+        y_train, y_test = labels[train_index], labels[test_index]
+        # Fit the classifier and give the test accuracy
+        clf.fit(X=x_train, y=y_train) #.score(X=x_test, y=y_test)
+        # Get the training, test, and validation accuracy in percentages
+        accuracy_train, ROC_AUC_train = get_accuracy(clf, x_train, y_train)
+        accuracy_test, ROC_AUC_test = get_accuracy(clf, x_test, y_test)
+
+        all_training_scores.append(accuracy_train)
+        all_test_scores.append(accuracy_test)
+        # all_val_scores.append(accuracy_val)
+        all_training_roc.append(ROC_AUC_train)
+        all_test_roc.append(ROC_AUC_test)
+        # all_val_roc.append(ROC_AUC_val)
+
+    accuracy_val, ROC_AUC_val = get_accuracy(clf, samples_val, labels_val)
+
+    # Convert the test accuracy list into a numpy array
+    all_training_scores = np.array(all_training_scores)
+    all_test_scores = np.array(all_test_scores)
+    # all_val_scores = np.array(all_val_scores)
+    all_training_roc = np.array(all_training_roc)
+    all_test_roc = np.array(all_test_roc)
+    # all_val_roc = np.array(all_val_roc)
+
+    training_accuracy = all_training_scores.mean()
+    training_std = all_training_scores.std() * 2
+    test_accuracy = all_test_scores.mean()
+    test_std = all_test_scores.std() * 2
+    training_roc = all_training_roc.mean()
+    training_roc_sd = all_training_roc.std() * 2
+    test_roc = all_test_roc.mean()
+    test_roc_sd = all_test_roc.std() * 2
+    # all_val_scores = all_val_scores.mean()
+    # all_val_scores = all_val_scores.std() * 2
+
+    return clf, training_accuracy, training_std, test_accuracy, test_std, training_roc, training_roc_sd, test_roc, \
+           test_roc_sd, accuracy_val, ROC_AUC_val
 
 
 def get_accuracy(clf, samples, labels):
@@ -167,8 +238,9 @@ def store_statistics(accuracy_train, ROC_AUC_train, accuracy_test, ROC_AUC_test,
     """
 
     # Get the file name where the statistical results will be written to
-    working_dir = os.path.dirname(os.path.abspath(__file__))
-    file_name = working_dir + "/output/norm_accuracy_checks.txt"
+    # working_dir = os.path.dirname(os.path.abspath(__file__))
+    # file_name = working_dir + "/output/norm_accuracy_checks.txt"
+    file_name = "/mnt/nexenta/kersj001/results/logistic/statistical_values.txt"
 
     # Extend the file with the results in the corresponding data types
     with open(file_name, 'a') as output:
@@ -177,6 +249,20 @@ def store_statistics(accuracy_train, ROC_AUC_train, accuracy_test, ROC_AUC_test,
                      ROC_AUC_train, ROC_AUC_test, ROC_AUC_val, run_time))
 
     output.close()
+
+
+def store_statistics_cv(accuracy_train, ROC_AUC_train, accuracy_test, ROC_AUC_test, accuracy_val, ROC_AUC_val, n_samples,
+                     n_neighbours, title, order_check, run_time, training_std, training_roc_sd, test_std, test_roc_sd):
+
+    file_name = "/mnt/nexenta/kersj001/results/logistic/statistical_values_cv.txt"
+
+    # Extend the file with the results in the corresponding data types
+    with open(file_name, 'a') as output:
+        output.write("\n{:d}\t{:s}\t{:d}\t{:d}\t{:.2f}\t{:.2f}\t{:.2f}\t{:.2f}\t{:.2f}\t{:.2f}\t{:.4f}\t{:.4f}\t{:.4f}"
+                     "\t{:.4f}\t{:.0f}".format(
+                     n_samples, title, order_check, n_neighbours, accuracy_train, accuracy_test, accuracy_val,
+                     ROC_AUC_train, ROC_AUC_test, ROC_AUC_val, training_std, training_roc_sd, test_std, test_roc_sd,
+                     run_time))
 
 
 def write_output(coefs, data_size, n_neighbours=0):
@@ -267,9 +353,9 @@ if __name__ == "__main__":
 
     # Run the  logistic regression classifier for samples containing only the data of the SNP of interest and also for
     # the samples including neighbouring positional data
-    print("NEIGHBOURS EXCLUDED")
-    weights_snp = logistic_regression(snp_data, labels_data, val_snp_data, labels_val, data_size, n_check,
-                                      title='excluding')
+    # print("NEIGHBOURS EXCLUDED")
+    # weights_snp = logistic_regression(snp_data, labels_data, val_snp_data, labels_val, data_size, n_check,
+    #                                   title='excluding')
     print("NEIGHBOURS INCLUDED")
     weights_neighbour = logistic_regression(neighbour_data, labels_data, val_neighbour_data, labels_val, data_size,
                                             n_check, n_neighbours=n_neighbours, title='including')
