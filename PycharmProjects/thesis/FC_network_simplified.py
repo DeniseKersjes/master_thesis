@@ -2,7 +2,7 @@
 """
 Author: Denise Kersjes (student number 950218-429-030)
 Date of creation: 23 January 2018
-Date of last edit: 03 April 2018
+Date of last edit: 14 May 2018
 Script for performing neural network on the SNP data set
 (The script is a better version of the 'FC_network' script in the sense of efficiency and complexity)
 
@@ -17,6 +17,7 @@ import tensorflow as tf
 import matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import roc_curve, auc, accuracy_score
+from tqdm import tqdm
 from optparse import OptionParser
 
 
@@ -41,7 +42,8 @@ class NeuralNetwork(object):
         """
 
         # Launch the TensorFlow session
-        self.session = tf.Session()
+        # self.session = tf.Session()
+        self.session = tf.Session(config=tf.ConfigProto(intra_op_parallelism_threads=3))
 
         # Get the number of features
         self.n_features = all_samples.shape[-1]
@@ -118,10 +120,10 @@ class NeuralNetwork(object):
             # Define an optimize function to decrease the loss function
             self.optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(self.cost)
 
-        # Create a graph to visualize the architecture in TensorBoard
-        working_dir = os.path.dirname(os.path.abspath(__file__))
-        writer = tf.summary.FileWriter(working_dir + "/graphs/tensorboard", graph=self.session.graph)
-        writer.close()
+        # # Create a graph to visualize the architecture in TensorBoard
+        # working_dir = os.path.dirname(os.path.abspath(__file__))
+        # writer = tf.summary.FileWriter(working_dir + "/graphs/tensorboard", graph=self.session.graph)
+        # writer.close()
 
     def get_batch(self, all_samples, all_labels, batch_size):
         """ Divide samples with corresponding labels in batches
@@ -159,12 +161,17 @@ class NeuralNetwork(object):
         # Get the batch samples and labels operations
         batch_samples, batch_labels = iterator.get_next()
 
+        # Convert the samples and labels to type float32 to use the leaky ReLU activation function
+        batch_samples = tf.cast(batch_samples, tf.float32)
+        batch_labels = tf.cast(batch_labels, tf.float32)
+
         # Make the iterator object global to initialize it from another function
         self.iter_initializer = iterator.initializer
 
         return batch_samples, batch_labels
 
-    def train(self, n_iterations, test_samples, test_labels, training_samples, training_labels):
+    def train(self, n_iterations, test_samples, test_labels, training_samples, training_labels, stop_samples,
+              stop_labels):
         """ Function that trains the neural network on the training data batches
 
         n_iterations: integer, defines the number of iteration for training the neural network
@@ -176,6 +183,10 @@ class NeuralNetwork(object):
          the training samples
         training_labels: numpy array, contains class label 0 (benign SNPs) and 1 (deleterious SNPs) of the training
          labels in the shape (number of samples, class dimension)
+        stop_samples: numpy array, contains features scores with shape (number of samples, number of features) of
+         the stop validation samples
+        stop_labels: numpy array, contains for the stop validation set class label 0 (benign SNPs) and 1 (deleterious
+         SNPs) in the shape (number of samples, class dimension)
         """
 
         # Keep track of the running time for training the neural network
@@ -184,20 +195,49 @@ class NeuralNetwork(object):
         # Train the neural network with the defined number of iterations on the training data batches
         all_training_loss = []
         all_test_loss = []
-        for iteration in range(n_iterations+1):
+        all_stop_loss = []
+        mean_training_loss = []
+        mean_test_loss = []
+        mean_stop_loss = []
+        for iteration in tqdm(range(n_iterations+1)):
             # The dataset create automatic batches, so there is no need to define the samples
             self.session.run(self.optimizer)
-            # Keep track of the training and test loss
-            training_loss = self.session.run(tf.reduce_mean(self.cost),
-                                                            feed_dict={"Input/BatchSamples:0": training_samples,
-                                                                       "Input/BatchLabels:0": training_labels})
-            test_loss = self.session.run(tf.reduce_mean(self.cost), feed_dict={"Input/BatchSamples:0": test_samples,
-                                                                               "Input/BatchLabels:0": test_labels})
-            # Store the loss in percentages
-            all_training_loss.append(training_loss*100)
-            all_test_loss.append(test_loss*100)
 
-            # Check for every 100th iteration the loss
+            # Check every 50th iteration the loss of the stop set to perform early stopping of the network
+            if iteration % 500 == 0:
+                training_loss = self.session.run(tf.reduce_mean(self.cost),
+                                                 feed_dict={"Input/BatchSamples:0": training_samples,
+                                                            "Input/BatchLabels:0": training_labels})
+                test_loss = self.session.run(tf.reduce_mean(self.cost),
+                                             feed_dict={"Input/BatchSamples:0": test_samples,
+                                                        "Input/BatchLabels:0": test_labels})
+                stop_loss = self.session.run(tf.reduce_mean(self.cost), feed_dict={"Input/BatchSamples:0": stop_samples,
+                                                                                   "Input/BatchLabels:0": stop_labels})
+                all_training_loss.append(training_loss)
+                all_test_loss.append(test_loss)
+                all_stop_loss.append(stop_loss)
+                mean_training = np.mean(all_training_loss)
+                mean_test = np.mean(all_test_loss)
+                mean_stop = np.mean(all_stop_loss)
+                mean_training_loss.append(mean_training)
+                mean_test_loss.append(mean_test)
+                mean_stop_loss.append(mean_stop)
+                # Check if the stop loss is increasing or decreasing
+                delta_loss = self.best_loss - mean_stop
+                print(delta_loss)
+                if mean_stop < self.best_loss:
+                    self.best_loss = mean_stop
+                if delta_loss <= 0.0001:
+                    self.best_loss = mean_stop
+                    self.stopping_step += 1
+                else:
+                    self.stopping_step = 0
+                # Stop training when the stopping loss is stable five times in a row
+                if self.stopping_step == 5:
+                    print("Early stopping is triggered at step {} with a loss of {}".format(iteration, mean_stop))
+                    break
+
+            # Check for every 100th iteration the loss and accuracy
             if iteration % 100 == 0:
                 training_cost = self.session.run(tf.reduce_mean(self.cost))
                 print("STEP {} | Training cost: {:.4f}".format(iteration, training_cost*100))
@@ -207,7 +247,7 @@ class NeuralNetwork(object):
         # Get the total running time of the neural network
         network_run_time = time.time() - start_time_network
 
-        return network_run_time, all_training_loss, all_test_loss
+        return network_run_time, mean_training_loss, mean_test_loss
 
     def evaluate(self, evaluation_samples, evaluation_labels):
         """ Function that evaluate the trained neural network with a test data set
@@ -462,12 +502,15 @@ def define_parameters(all_features, act_func, dropout, fc_layer_units, training_
     elif act_func == 'relu' or act_func == 'r':
         act_func = tf.nn.relu
         act_title = 'ReLU'
+    elif act_func == 'leakyrelu' or act_func == 'leaky' or act_func == 'l':
+        act_func = tf.nn.leaky_relu
+        act_title = 'Leaky ReLU'
     elif act_func == 'tanh' or act_func == 'tan' or act_func == 't':
         act_func = tf.tanh
         act_title = 'tanH'
     else:
         act_func = None
-        act_title = 'none'
+        act_title = 'linear'
 
     return all_features, act_func, act_title, batch_size, layers, dropout_booleans, int_layer_units
 
@@ -486,8 +529,8 @@ def get_arguments():
     # dropout_rate = 0.5
     # activation_function = 'r'  # tf.nn.relu
     # batch_percentage = 0.01
-    # iterations = 2000
-    # fc_nodes = '5'
+    # iterations = 10000
+    # fc_nodes = '8'
     # dropout_layer = 'f'
 
     # Specify the options for running from the command line
@@ -571,9 +614,9 @@ if __name__ == "__main__":
     labels = data_labels(data=data)
     labels_val = data_labels(data=val_data)
 
-    # Define a training and test set
-    test_size = 0.1  # training is set on 90%
-    training_data, test_data, training_labels, test_labels = train_test_split(samples, labels, test_size=test_size)
+    # Define a training, test and stop set
+    training_data, test_data, training_labels, test_labels = train_test_split(samples, labels, test_size=0.4)
+    test_data, stop_data, test_labels, stop_labels = train_test_split(test_data, test_labels, test_size=0.5)
 
     # Get the parameters for the neural network in correct format
     feature_title, act_func, act_title, batch_size, layer_names, dropout_booleans, fc_layer_units = define_parameters(
@@ -588,7 +631,8 @@ if __name__ == "__main__":
     # Train the neural network
     run_time, training_loss, test_loss = nn.train(n_iterations=iterations, test_samples=test_data,
                                                   test_labels=test_labels, training_samples=training_data,
-                                                  training_labels=training_labels)
+                                                  training_labels=training_labels, stop_samples=stop_data,
+                                                  stop_labels=stop_labels)
 
     # Evaluate the neural network with the test data and validation data
     training_roc, training_accuracy, = nn.evaluate(evaluation_samples=training_data, evaluation_labels=training_labels)
@@ -602,11 +646,17 @@ if __name__ == "__main__":
     print("AUC validation data: {:.2f}".format(val_roc))
 
     # Get some statistics about the cost function
-    start_test_cost = test_loss[0]
-    end_test_cost = test_loss[-1]
-    min_test_cost = min(test_loss)
-    min_test_cost_idx = test_loss.index(min_test_cost)
-    print("\noptimum number of iterations: {}".format(min_test_cost_idx))
+    try:
+        start_test_cost = test_loss[0]
+        end_test_cost = test_loss[-1]
+        min_test_cost = min(test_loss)
+        min_test_cost_idx = test_loss.index(min_test_cost)
+        print("\noptimum number of iterations: {}".format(min_test_cost_idx))
+    except:
+        start_test_cost = 0
+        end_test_cost = 0
+        min_test_cost = 0
+        min_test_cost_idx = 0
 
     # Write the statistical outcomes to a defined file
     nn.write_results(all_features=feature_title, n_samples=data_size, n_neighbours=n_neighbours, layers=layer_names,
@@ -621,3 +671,6 @@ if __name__ == "__main__":
                   training_accuracy, test_accuracy=test_accuracy, val_accuracy=val_accuracy, layers=layer_names,
                   data_size=data_size, n_neighbours=n_neighbours, dropout_layer=dropout_booleans, dropout_rate=
                   dropout_rate)
+
+    # Get the complete running time of the script
+    print("----- {} seconds -----".format(round(time.time() - start_time), 2))
